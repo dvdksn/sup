@@ -8,7 +8,8 @@ check() {
     COMP_WORDS=("$SUP" "$@")
     COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
     _sup_complete
-    actual=$(printf '%s\n' "${COMPREPLY[@]}")
+    # Bash 3.2 treats an empty array as unset under nounset.
+    actual=$(printf '%s\n' "${COMPREPLY[@]-}")
     if [[ $actual != "$want" ]]; then
         printf 'completion for %s: expected <%s>, got <%s>\n' "$*" "$want" "$actual" >&2
         exit 1

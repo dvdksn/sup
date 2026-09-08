@@ -17,3 +17,5 @@ jobs:
       - run: go vet ./...
       - run: go build -o bin/sup ./cmd/sup
       - run: sh tests/integration.sh
+        env:
+          BASH_BIN: /bin/bash
