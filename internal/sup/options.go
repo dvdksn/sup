@@ -1,6 +1,7 @@
 package sup
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"regexp"
@@ -11,9 +12,9 @@ const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
 
   -d, --detached      Provision without attaching (sbx env create)
   --kit SOURCE|ALIAS  Add a kit (repeatable, creation only)
-  --name NAME        Environment name (default: owner-repo)
-  --ref REF          Branch, tag, or commit (creation only)
-  --pr NUMBER        Pull request (creation only)
+  --name NAME        Override the derived environment name
+  --ref REF          Branch, tag, or commit (adds a ref suffix)
+  --pr NUMBER        Pull request (adds a PR suffix)
   --config PATH      Config file (default: ~/.config/sup/config.lua)
   --plan             Show sbx's plan without saving or provisioning
   -h, --help         Show this help
@@ -104,6 +105,12 @@ func identity(o options) (repo, name string, err error) {
 		name = o.target
 		if repo != "" {
 			name = strings.ReplaceAll(repo, "/", "-")
+			if o.pr != "" {
+				name += "-pr-" + o.pr
+			} else if o.ref != "" {
+				name += "-ref-" + o.ref
+			}
+			name = safeDerivedName(name)
 		}
 	}
 	if name == "default" || !namePattern.MatchString(name) {
@@ -113,4 +120,22 @@ func identity(o options) (repo, name string, err error) {
 		return "", "", errors.New("--name requires a repository target")
 	}
 	return repo, name, nil
+}
+
+// Keep ordinary names readable. Hash any lossy conversion so refs like
+// feature/foo and feature-foo cannot silently target the same environment.
+func safeDerivedName(raw string) string {
+	name := regexp.MustCompile(`[^A-Za-z0-9.-]+`).ReplaceAllString(raw, "-")
+	name = strings.TrimLeft(name, ".-")
+	if name == "" {
+		name = "env"
+	}
+	if name != raw || len(name) > 100 {
+		digest := fmt.Sprintf("%x", sha256.Sum256([]byte(raw)))[:10]
+		if len(name) > 89 {
+			name = name[:89]
+		}
+		name += "-" + digest
+	}
+	return name
 }

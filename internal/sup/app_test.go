@@ -69,11 +69,27 @@ func TestLifecycle(t *testing.T) {
 	run("docker/docs", "--name", "foo.lock", "-d")
 	run("docker/docs", "--name", "foo", "-d")
 	run("foo.lock")
+	run("docker/docs", "--pr", "123", "-d")
+	run("docker/docs", "--ref", "feature/foo", "-d")
+	run("docker/docs", "--pr", "456", "--name", "explicit-review", "-d")
 	// Config edits cannot silently change a saved environment.
 	if err = os.WriteFile(config, []byte(`error('must not run')`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	run("docker-docs")
+	run("docker/docs", "--pr", "123")
+	run("docker/docs", "--ref", "feature/foo")
+	run("docker/docs", "--pr", "456", "--name", "explicit-review")
+	run("docker-docs-pr-123")
+	for _, selection := range [][]string{
+		{"docker/docs", "--pr", "457", "--name", "explicit-review"},
+		{"docker/docs", "--ref", "main", "--name", "explicit-review"},
+		{"docker/docs", "--pr", "123", "--name", "docker-docs"},
+	} {
+		if _, err := Run(selection, nil, io.Discard, io.Discard); err == nil {
+			t.Fatalf("accepted conflicting selection: %v", selection)
+		}
+	}
 	data, _ = os.ReadFile(log)
 	if !strings.HasPrefix(string(data), "env\nrun\n") {
 		t.Fatal("did not run")
@@ -90,6 +106,20 @@ func TestLifecycle(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(stateRoot, "sup", ".locks", "docker-docs")); !os.IsNotExist(err) {
 		t.Fatal("lock left behind")
+	}
+	// Legacy snapshots can reconnect, but cannot assert a selector they never saved.
+	state.Version = 1
+	legacy, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(stateFile, legacy, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SUP_TEST_EXIT", "0")
+	run("docker-docs")
+	if _, err := Run([]string{"docker/docs", "--name", "docker-docs", "--pr", "123"}, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "predates") {
+		t.Fatalf("legacy selector: %v", err)
 	}
 	// Corrupted state cannot introduce unvalidated fields such as a workspace.
 	if err = os.WriteFile(stateFile, []byte(`{"version":1,"repo":"docker/docs","env":{"workspace":"/tmp"}}`), 0600); err != nil {

@@ -15,6 +15,8 @@ import (
 type snapshot struct {
 	Version int         `json:"version"`
 	Repo    string      `json:"repo"`
+	Ref     string      `json:"ref,omitempty"`
+	PR      string      `json:"pr,omitempty"`
 	Env     Environment `json:"env"`
 }
 
@@ -81,7 +83,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		if err = dec.Decode(&trailing); err != io.EOF {
 			return 1, errors.New("invalid saved state: trailing data")
 		}
-		if state.Version != 1 || !repoPattern.MatchString(state.Repo) || state.Env.Name != name {
+		if (state.Version != 1 && state.Version != 2) || !repoPattern.MatchString(state.Repo) || state.Env.Name != name {
 			return 1, errors.New("unsupported or corrupt saved state")
 		}
 		if err = validate(&state.Env); err != nil {
@@ -90,7 +92,15 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		if repo != "" && repo != state.Repo {
 			return 1, fmt.Errorf("name already belongs to %s; choose --name", state.Repo)
 		}
-		if o.ref != "" || o.pr != "" || len(o.kits) > 0 || o.config != "" {
+		if o.ref != "" || o.pr != "" {
+			if state.Version == 1 {
+				return 1, errors.New("saved environment predates PR/ref tracking; reconnect by its saved name without --pr/--ref, or choose a new --name")
+			}
+			if o.ref != state.Ref || o.pr != state.PR {
+				return 1, errors.New("requested PR/ref differs from the saved environment; choose a new --name")
+			}
+		}
+		if len(o.kits) > 0 || o.config != "" {
 			return 1, errors.New("environment configuration is already saved; reconnect without creation flags or choose a new --name")
 		}
 	} else {
@@ -108,7 +118,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		state = snapshot{1, repo, *env}
+		state = snapshot{Version: 2, Repo: repo, Ref: o.ref, PR: o.pr, Env: *env}
 	}
 	encoded, err := json.MarshalIndent(state.Env, "", "  ")
 	if err != nil {

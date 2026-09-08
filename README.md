@@ -5,8 +5,8 @@ A personal Docker Sandboxes launcher: a Go executable with Lua configuration.
 ```sh
 sup docker/docs                   # Create and attach, or reconnect
 sup docker/runtime-kits --kit task
-sup docker/docs --name docs-review --pr 12345
-sup docs-review                   # Reconnect using saved configuration
+sup docker/docs --pr 12345         # Uses docker-docs-pr-12345
+sup docker-docs-pr-12345           # Reconnect using saved configuration
 sup docker/docs -d                # Provision without attaching
 sup docker/docs --name docs-test --kit browser --plan
 ```
@@ -107,7 +107,7 @@ The `defaults` callback receives:
 | Field | Value |
 | --- | --- |
 | `repo` | `owner/repository`, with a trailing `.git` removed |
-| `name` | Explicit `--name`, or `owner-repository` |
+| `name` | Explicit `--name`, or the derived repository/PR/ref name |
 | `ref` | Ref, or an empty string |
 | `pr` | PR number as a string, or an empty string |
 
@@ -170,9 +170,27 @@ propagated.
 Each name also has `state.json`, containing its repository and resolved config.
 It is saved before provisioning, so failed/cancelled creates can be retried with
 identical inputs. Reconnection skips Lua evaluation and reuses that snapshot.
-Existing names reject `--kit`, `--ref`, `--pr`, and `--config`, even when the
-supplied value matches. Use a new `--name` for a different setup. Original Lua
-implementation snapshots remain readable.
+Existing names reject `--kit` and `--config`, even when the supplied value
+matches. Repeated `--pr` or `--ref` selections reconnect when they match the saved
+selection. A different selection with an existing explicit `--name` is rejected.
+Use a new name for a different setup. Old snapshots remain readable; since they
+lack selection metadata, reconnect to them by saved name without `--pr`/`--ref`.
+
+Names are derived automatically:
+
+```text
+sup docker/docs              -> docker-docs
+sup docker/docs --pr 123      -> docker-docs-pr-123
+sup docker/docs --ref main    -> docker-docs-ref-main
+```
+
+`--name` always overrides this derivation. Unsupported name characters in refs
+(such as `/`) become hyphens. Whenever sanitization or truncation is necessary,
+a ten-character hash is appended to distinguish the original inputs. Derived
+names fit within 100 characters. `ctx.ref` retains the original ref for cloning;
+`ctx.name` already contains the final name, so config should not add a suffix.
+Repeating the same PR/ref command reuses its snapshot without re-evaluating Lua.
+Plain `sup docker/docs` continues to select the base environment.
 
 `--plan` invokes `sbx env plan` without saving a new environment. It evaluates
 Lua for a new name and uses the stored snapshot for an existing one. It creates

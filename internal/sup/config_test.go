@@ -158,3 +158,36 @@ func TestInvalidComposition(t *testing.T) {
 		}
 	}
 }
+
+func TestDerivedNames(t *testing.T) {
+	cases := []struct {
+		o    options
+		want string
+	}{
+		{options{target: "docker/docs"}, "docker-docs"},
+		{options{target: "docker/docs", pr: "123"}, "docker-docs-pr-123"},
+		{options{target: "docker/docs.git", ref: "main"}, "docker-docs-ref-main"},
+		{options{target: "docker/docs", pr: "123", name: "review"}, "review"},
+		{options{target: "docker-docs-pr-123"}, "docker-docs-pr-123"},
+	}
+	for _, tc := range cases {
+		_, name, err := identity(tc.o)
+		if err != nil || name != tc.want {
+			t.Fatalf("%+v: %q, %v", tc.o, name, err)
+		}
+	}
+	refs := []string{"feature/foo", "feature-foo", "feature_foo", strings.Repeat("long", 100), strings.Repeat("long", 99) + "tail"}
+	names := map[string]bool{}
+	for _, ref := range refs {
+		o := options{target: "docker/docs", ref: ref}
+		_, name, err := identity(o)
+		if err != nil || len(name) > 100 || !namePattern.MatchString(name) || names[name] {
+			t.Fatalf("bad or colliding name %q: %v", name, err)
+		}
+		names[name] = true
+		_, again, _ := identity(o)
+		if name != again {
+			t.Fatal("unstable name")
+		}
+	}
+}
