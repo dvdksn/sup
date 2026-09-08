@@ -5,7 +5,7 @@ A personal Docker Sandboxes launcher: a Go executable with Lua configuration.
 ```sh
 sup docker/docs                   # Create and attach, or reconnect
 sup docker/runtime-kits --kit task
-sup docker/docs --pr 12345         # Uses docker-docs-pr-12345
+sup docker/docs -a pr=12345         # Uses docker-docs-pr-12345
 sup docker-docs-pr-12345           # Reconnect using saved configuration
 sup docker/docs -d                # Provision without attaching
 sup docker/docs --name docs-test --kit browser --plan
@@ -47,10 +47,21 @@ cp -n examples/config.lua ~/.config/sup/config.lua
 local sup = require('sup')
 
 sup.setup({
+  args = {
+    pr = { description = 'Pull request to check out', pattern = '[1-9][0-9]*' },
+    ref = { description = 'Branch, tag, or commit' },
+  },
+  name = function(ctx)
+    assert(not (ctx.args.pr and ctx.args.ref), 'pr and ref are mutually exclusive')
+    if ctx.args.pr then return ctx.name .. '-pr-' .. ctx.args.pr end
+    if ctx.args.ref then return ctx.name .. '-ref-' .. ctx.args.ref end
+    return ctx.name
+  end,
   kits = {
     browser = 'ghcr.io/dvdksn/browser-kit:codex',
   },
   defaults = function(ctx)
+    assert(not (ctx.args.pr and ctx.args.ref), 'pr and ref are mutually exclusive')
     return {
       agent = 'codex',
       secrets = { github = { command = 'gh auth token' } },
@@ -58,7 +69,7 @@ sup.setup({
         {
           source = 'git+https://github.com/cdupuis/sbx-kits.git#dir=github-clone',
           args = {
-            repo = ctx.repo, ref = ctx.ref, pr = ctx.pr, dir = '/project',
+            repo = ctx.repo, ref = ctx.args.ref or '', pr = ctx.args.pr or '', dir = '/project',
           },
         },
       },
@@ -107,14 +118,14 @@ The `defaults` callback receives:
 | Field | Value |
 | --- | --- |
 | `repo` | `owner/repository`, with a trailing `.git` removed |
-| `name` | Explicit `--name`, or the derived repository/PR/ref name |
-| `ref` | Ref, or an empty string |
-| `pr` | PR number as a string, or an empty string |
+| `name` | Resolved environment name |
+| `args` | Declared argument values, including defaults; omitted optional keys are nil |
 
 It returns native sbxenv fields. `schemaVersion` defaults to `"1"`; `name` defaults
 to `ctx.name` and cannot identify a different sandbox. `workspace` and
 `additionalWorkspaces` are rejected. The clone behavior is supplied by your kit,
-not hardcoded into the launcher. `--ref` and `--pr` are mutually exclusive.
+not hardcoded into the launcher. The example config enforces mutual exclusion
+between its `pr` and `ref` arguments.
 
 GopherLua embeds Lua 5.1 with some extensions, including `goto`; it is not Lua
 5.4 or LuaJIT and does not load native Lua C modules. Standard GopherLua libraries
@@ -125,6 +136,51 @@ blocking host-library calls. Config is never discovered in cloned repositories.
 For migration, the original `configure(ctx)` callback remains supported, but
 cannot be combined with `defaults` or `repos`. A returned config table is also
 supported; do not combine it with `sup.setup` in the same file.
+
+## Config arguments and naming
+
+```sh
+sup args
+sup args --config /path/to/config.lua
+sup docker/docs -a pr=123
+sup docker/docs --arg ref=feature/auth
+```
+
+Declare inputs in the top-level `args` table (distinct from a kit's own `args`):
+
+```lua
+args = {
+  browser = {
+    description = 'Browser engine',
+    default = 'chromium',
+    choices = { 'chromium', 'firefox' },
+  },
+  ticket = { description = 'Ticket ID', required = true },
+},
+```
+
+`sup args` prints descriptions, defaults, required flags, choices, and patterns.
+It executes the trusted config file to register its declarations, but does not
+call `name` or `defaults`, require argument values, contact sbx, or create state.
+Declarations themselves must be valid, including any declared default values.
+
+Every input is a string. `-a` and `--arg` split on the first `=`; values may contain
+more `=` characters, colons, or shell-quoted spaces. Empty values are permitted.
+Unknown and duplicate keys are rejected. Optional declarations may omit both
+`default` and `required`; `required=true` cannot be combined with a default.
+`choices` validates exact strings. `pattern` uses Go RE2 syntax and matches the
+entire value. Cross-argument rules belong in your Lua callbacks.
+
+An optional `name(ctx)` callback receives the base repository-derived name and
+resolved args. It returns a string; sup sanitizes unsupported characters and adds
+a short hash whenever sanitization or truncation is needed. `--name` bypasses the
+callback. Without a naming callback, all arguments use the same `owner-repo`
+name; values do not automatically get added to it.
+
+The example config adds PR/ref suffixes. The launcher no longer has special
+`--pr`, `--ref`, `ctx.pr`, or `ctx.ref` fields: use `-a pr=123`, declare the inputs,
+and read `ctx.args.pr` / `ctx.args.ref`. New arguments are stored in plaintext
+alongside the resolved environment; use native sbx secret sources for credentials.
 
 ## Editor support and validation
 
@@ -154,12 +210,12 @@ credentials, kit availability, and approvals.
 ```sh
 sup ls
 sup rm docker/docs
-sup rm docker/docs --pr 123
+sup rm docker/docs -a pr=123
 sup rm docker-docs-pr-123
 sup rm docs-review --force
 ```
 
-`sup ls` lists saved environments with their repository, PR/ref selection, live
+`sup ls` lists saved environments with their repository, saved argument selection, live
 status from `sbx ls --json`, and number of kits. Sandboxes created outside sup are
 omitted. A saved environment absent from sbx is `missing`. If sbx is unavailable,
 saved rows are still shown with `unknown` status, a warning, and a nonzero exit.
@@ -176,8 +232,9 @@ two managed state files. Declined or failed removal, or failure to verify absenc
 keeps saved state. sbx currently reports a declined removal as exit zero plus
 `Aborted.` on stderr; sup recognizes that response as cancellation. An already
 missing sandbox can still be removed this way to clean up credentials and saved
-state. Unknown names are rejected; sup never evaluates config to create state for
-removal. `ls` and `rm` are reserved command names; an existing environment with
+state. Unknown names are rejected. Repository-based removal loads the config to
+resolve its name; removal by saved name does not load it. Neither evaluates
+`defaults` or creates environment state. `args`, `ls`, and `rm` are reserved command names; an existing environment with
 one of those names can still be selected using its repo and `--name`.
 
 ## State and execution
@@ -198,33 +255,31 @@ streams. No shell command is constructed. `-d` waits for provisioning and exits
 without attaching; it does not start a background agent task. sbx exit codes are
 propagated.
 
-Each name also has `state.json`, containing its repository and resolved config.
-It is saved before provisioning, so failed/cancelled creates can be retried with
-identical inputs. Reconnection skips Lua evaluation and reuses that snapshot.
-Existing names reject `--kit` and `--config`, even when the supplied value
-matches. Repeated `--pr` or `--ref` selections reconnect when they match the saved
-selection. A different selection with an existing explicit `--name` is rejected.
-Use a new name for a different setup. Old snapshots remain readable; since they
-lack selection metadata, reconnect to them by saved name without `--pr`/`--ref`.
+Each name also has `state.json`, containing its repository, resolved arguments,
+and resolved environment. It is saved before provisioning, so failed/cancelled
+creates can be retried with identical inputs. Saved arguments include defaults.
 
-Names are derived automatically:
+Repository-based commands load the config, validate inputs, and invoke `name`
+(if provided) to locate state. Existing environments then reuse their saved
+snapshot without evaluating `defaults`. Changing naming rules or argument
+defaults can select a different name. Reconnect by saved name to bypass the config
+entirely, even if the config has changed or is unavailable:
 
-```text
-sup docker/docs              -> docker-docs
-sup docker/docs --pr 123      -> docker-docs-pr-123
-sup docker/docs --ref main    -> docker-docs-ref-main
+```sh
+sup docker/docs -a pr=123  # Config resolves docker-docs-pr-123
+sup docker-docs-pr-123     # Saved state; config is not loaded
 ```
 
-`--name` always overrides this derivation. Unsupported name characters in refs
-(such as `/`) become hyphens. Whenever sanitization or truncation is necessary,
-a ten-character hash is appended to distinguish the original inputs. Derived
-names fit within 100 characters. `ctx.ref` retains the original ref for cloning;
-`ctx.name` already contains the final name, so config should not add a suffix.
-Repeating the same PR/ref command reuses its snapshot without re-evaluating Lua.
-Plain `sup docker/docs` continues to select the base environment.
+Explicit `--name` also bypasses config on reconnect. Supplied argument values
+must match the snapshot; unspecified values keep their saved values. Existing
+names reject `--kit` and `--config`. Use a new name for a different setup.
+Snapshots from older versions remain readable; the oldest lack any selection
+metadata and must be accessed without arguments. Version-2 snapshots can still
+match `-a pr=...` and `-a ref=...` against their saved metadata.
 
 `--plan` invokes `sbx env plan` without saving a new environment. It evaluates
-Lua for a new name and uses the stored snapshot for an existing one. It creates
+the config as needed for naming, evaluates defaults only for a new name, and
+uses the stored snapshot for an existing one. It creates
 the parent state directory if necessary and removes temporary plan files.
 
 State is not a live sandbox inventory. If a sandbox was deleted outside `sup`,

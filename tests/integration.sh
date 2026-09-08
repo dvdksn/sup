@@ -23,7 +23,7 @@ grep -qx create "$SUP_TEST_LOG"
 printf 'error("should not run")\n' > "$XDG_CONFIG_HOME/sup/config.lua"
 "$SUP" docker-docs
 grep -qx run "$SUP_TEST_LOG"
-if "$SUP" docker/docs --kit vale; then exit 1; fi
+if "$SUP" docker-docs --kit vale; then exit 1; fi
 if "$SUP" other/repo --name docker-docs; then exit 1; fi
 if "$SUP" missing; then exit 1; fi
 export SUP_TEST_EXIT=7

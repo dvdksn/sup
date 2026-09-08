@@ -22,10 +22,7 @@ func compose(L *lua.LState, config *lua.LTable, ctx ConfigContext) (*lua.LTable,
 		defaults = legacy
 	}
 	if fn, ok := defaults.(*lua.LFunction); ok {
-		input := L.NewTable()
-		for k, v := range map[string]string{"repo": ctx.Repo, "name": ctx.Name, "ref": ctx.Ref, "pr": ctx.PR} {
-			input.RawSetString(k, lua.LString(v))
-		}
+		input := luaContext(L, ctx)
 		if err := L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, input); err != nil {
 			return nil, err
 		}

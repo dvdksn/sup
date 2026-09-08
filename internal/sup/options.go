@@ -10,9 +10,11 @@ import (
 
 const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
        sup ls
-       sup rm OWNER/REPO|SAVED-NAME [--pr NUMBER|--ref REF] [--name NAME] [-f]
+       sup args [--config PATH]
+       sup rm OWNER/REPO|SAVED-NAME [-a KEY=VALUE] [--name NAME] [-f]
 
 Commands:
+  args               Show arguments declared by the Lua config
   ls                 List saved environments and live sandbox status
   rm                 Remove through sbx, then forget saved state
 
@@ -20,8 +22,7 @@ Options:
   -d, --detached      Provision without attaching (sbx env create)
   --kit SOURCE|ALIAS  Add a kit (repeatable, creation only)
   --name NAME        Override the derived environment name
-  --ref REF          Branch, tag, or commit (adds a ref suffix)
-  --pr NUMBER        Pull request (adds a PR suffix)
+  -a, --arg KEY=VALUE Pass a declared config argument (repeatable)
   --config PATH      Config file (default: ~/.config/sup/config.lua)
   --plan             Show sbx's plan without saving or provisioning
   -f, --force        Skip sbx removal confirmation (rm only)
@@ -31,16 +32,18 @@ Saved environments reuse their configuration. -d does not start an agent task.
 `
 
 type options struct {
-	target, name, ref, pr, config, command string
-	kits                                   []string
-	detached, plan, help, force            bool
+	target, name, config, command string
+	kits                          []string
+	args                          map[string]string
+	detached, plan, help, force   bool
 }
 
 func parse(args []string) (o options, err error) {
-	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm") {
+	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm" || args[0] == "args") {
 		o.command = args[0]
 		args = args[1:]
 	}
+	o.args = map[string]string{}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -53,12 +56,12 @@ func parse(args []string) (o options, err error) {
 			o.force = true
 		case "--plan":
 			o.plan = true
-		case "--kit", "--name", "--ref", "--pr", "--config":
+		case "--kit", "--name", "--config", "-a", "--arg":
 			i++
 			if i >= len(args) || args[i] == "" || strings.HasPrefix(args[i], "--") {
 				return o, fmt.Errorf("%s requires a value", a)
 			}
-			if seen[a] && a != "--kit" {
+			if seen[a] && a != "--kit" && a != "-a" && a != "--arg" {
 				return o, fmt.Errorf("%s specified twice", a)
 			}
 			seen[a] = true
@@ -67,12 +70,16 @@ func parse(args []string) (o options, err error) {
 				o.kits = append(o.kits, args[i])
 			case "--name":
 				o.name = args[i]
-			case "--ref":
-				o.ref = args[i]
-			case "--pr":
-				o.pr = args[i]
 			case "--config":
 				o.config = args[i]
+			case "-a", "--arg":
+				key, value, ok := strings.Cut(args[i], "=")
+				if !ok {
+					return o, errors.New("--arg requires KEY=VALUE")
+				}
+				if err = putArg(o.args, key, value); err != nil {
+					return o, err
+				}
 			}
 		default:
 			if strings.HasPrefix(a, "-") {
@@ -88,8 +95,14 @@ func parse(args []string) (o options, err error) {
 		return o, nil
 	}
 	if o.command == "ls" {
-		if o.target != "" || o.name != "" || o.ref != "" || o.pr != "" || o.config != "" || len(o.kits) > 0 || o.detached || o.plan || o.force {
+		if o.target != "" || o.name != "" || len(o.args) > 0 || o.config != "" || len(o.kits) > 0 || o.detached || o.plan || o.force {
 			return o, errors.New("sup ls takes no arguments")
+		}
+		return o, nil
+	}
+	if o.command == "args" {
+		if o.target != "" || o.name != "" || len(o.args) > 0 || len(o.kits) > 0 || o.detached || o.plan || o.force {
+			return o, errors.New("sup args only accepts --config")
 		}
 		return o, nil
 	}
@@ -101,12 +114,6 @@ func parse(args []string) (o options, err error) {
 	}
 	if o.target == "" {
 		return o, errors.New(Help)
-	}
-	if o.ref != "" && o.pr != "" {
-		return o, errors.New("--ref and --pr are mutually exclusive")
-	}
-	if o.pr != "" && !regexp.MustCompile(`^[1-9][0-9]*$`).MatchString(o.pr) {
-		return o, errors.New("--pr must be a positive number")
 	}
 	return o, nil
 }
@@ -131,11 +138,6 @@ func identity(o options) (repo, name string, err error) {
 		name = o.target
 		if repo != "" {
 			name = strings.ReplaceAll(repo, "/", "-")
-			if o.pr != "" {
-				name += "-pr-" + o.pr
-			} else if o.ref != "" {
-				name += "-ref-" + o.ref
-			}
 			name = safeDerivedName(name)
 		}
 	}
@@ -164,4 +166,17 @@ func safeDerivedName(raw string) string {
 		name += "-" + digest
 	}
 	return name
+}
+
+var argNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
+
+func putArg(args map[string]string, key, value string) error {
+	if !argNamePattern.MatchString(key) {
+		return fmt.Errorf("invalid argument name: %s", key)
+	}
+	if _, exists := args[key]; exists {
+		return fmt.Errorf("argument %s specified twice", key)
+	}
+	args[key] = value
+	return nil
 }

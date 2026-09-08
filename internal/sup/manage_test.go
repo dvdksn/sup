@@ -13,6 +13,18 @@ func managementFixture(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	if err := os.MkdirAll(filepath.Join(root, "config", "sup"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	example, err := os.ReadFile("../../examples/config.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(root, "config", "sup", "config.lua"), example, 0600); err != nil {
+		t.Fatal(err)
+	}
+
 	bin := filepath.Join(root, "bin")
 	if err := os.Mkdir(bin, 0700); err != nil {
 		t.Fatal(err)
@@ -105,7 +117,7 @@ func TestRemove(t *testing.T) {
 			t.Setenv("SUP_RM_EXIT", tc.exit)
 			t.Setenv("SUP_INVENTORY", tc.inventory)
 			var out, stderr bytes.Buffer
-			code, err := Run([]string{"rm", "docker/docs", "--pr", "123"}, strings.NewReader("n\n"), &out, &stderr)
+			code, err := Run([]string{"rm", "docker/docs", "-a", "pr=123"}, strings.NewReader("n\n"), &out, &stderr)
 			_, statErr := os.Stat(filepath.Join(root, "docker-docs-pr-123", "state.json"))
 			if (statErr == nil) != tc.keep {
 				t.Fatalf("keep=%v, stat=%v; %d %v %s %s", tc.keep, statErr, code, err, out.String(), stderr.String())
@@ -141,7 +153,7 @@ func TestRemoveForceAndMissing(t *testing.T) {
 	}
 }
 func TestManagementOptions(t *testing.T) {
-	for _, args := range [][]string{{"ls", "docker/docs"}, {"ls", "--pr", "1"}, {"rm"}, {"rm", "name", "--plan"}, {"rm", "name", "--kit", "browser"}, {"docker/docs", "--force"}} {
+	for _, args := range [][]string{{"ls", "docker/docs"}, {"ls", "-a", "pr=1"}, {"rm"}, {"rm", "name", "--plan"}, {"rm", "name", "--kit", "browser"}, {"docker/docs", "--force"}} {
 		if _, err := parse(args); err == nil {
 			t.Fatalf("accepted %v", args)
 		}

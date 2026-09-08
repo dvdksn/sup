@@ -10,15 +10,26 @@ local kits = {
 }
 sup.setup({
   kits = kits,
+  args = {
+    pr = { description = 'Pull request to check out', pattern = '[1-9][0-9]*' },
+    ref = { description = 'Branch, tag, or commit' },
+  },
+  name = function(ctx)
+    assert(not (ctx.args.pr and ctx.args.ref), 'pr and ref are mutually exclusive')
+    local name = ctx.repo:gsub('/', '-')
+    if ctx.args.pr then return name .. '-pr-' .. ctx.args.pr end
+    if ctx.args.ref then return name .. '-ref-' .. ctx.args.ref end
+    return name
+  end,
   defaults = function(ctx)
+    assert(not (ctx.args.pr and ctx.args.ref), 'pr and ref are mutually exclusive')
     return {
       schemaVersion = '1',
-      name = ctx.name,
       agent = 'codex',
       secrets = { github = { command = 'gh auth token' } },
       kits = {
         { source = 'clone', args = {
-          repo = ctx.repo, ref = ctx.ref, pr = ctx.pr, dir = '/project',
+          repo = ctx.repo, ref = ctx.args.ref or '', pr = ctx.args.pr or '', dir = '/project',
         } },
         'signing',
       },

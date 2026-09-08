@@ -69,22 +69,22 @@ func TestLifecycle(t *testing.T) {
 	run("docker/docs", "--name", "foo.lock", "-d")
 	run("docker/docs", "--name", "foo", "-d")
 	run("foo.lock")
-	run("docker/docs", "--pr", "123", "-d")
-	run("docker/docs", "--ref", "feature/foo", "-d")
-	run("docker/docs", "--pr", "456", "--name", "explicit-review", "-d")
+	run("docker/docs", "-a", "pr=123", "-d")
+	run("docker/docs", "-a", "ref=feature/foo", "-d")
+	run("docker/docs", "-a", "pr=456", "--name", "explicit-review", "-d")
+	run("docker-docs")
+	run("docker/docs", "-a", "pr=123")
+	run("docker/docs", "-a", "ref=feature/foo")
+	run("docker/docs", "-a", "pr=456", "--name", "explicit-review")
 	// Config edits cannot silently change a saved environment.
 	if err = os.WriteFile(config, []byte(`error('must not run')`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	run("docker-docs")
-	run("docker/docs", "--pr", "123")
-	run("docker/docs", "--ref", "feature/foo")
-	run("docker/docs", "--pr", "456", "--name", "explicit-review")
 	run("docker-docs-pr-123")
 	for _, selection := range [][]string{
-		{"docker/docs", "--pr", "457", "--name", "explicit-review"},
-		{"docker/docs", "--ref", "main", "--name", "explicit-review"},
-		{"docker/docs", "--pr", "123", "--name", "docker-docs"},
+		{"docker/docs", "-a", "pr=457", "--name", "explicit-review"},
+		{"docker/docs", "-a", "ref=main", "--name", "explicit-review"},
+		{"docker/docs", "-a", "pr=123", "--name", "docker-docs"},
 	} {
 		if _, err := Run(selection, nil, io.Discard, io.Discard); err == nil {
 			t.Fatalf("accepted conflicting selection: %v", selection)
@@ -118,7 +118,7 @@ func TestLifecycle(t *testing.T) {
 	}
 	t.Setenv("SUP_TEST_EXIT", "0")
 	run("docker-docs")
-	if _, err := Run([]string{"docker/docs", "--name", "docker-docs", "--pr", "123"}, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "predates") {
+	if _, err := Run([]string{"docker/docs", "--name", "docker-docs", "-a", "pr=123"}, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "predates") {
 		t.Fatalf("legacy selector: %v", err)
 	}
 	// Corrupted state cannot introduce unvalidated fields such as a workspace.

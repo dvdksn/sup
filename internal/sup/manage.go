@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 )
@@ -93,12 +94,24 @@ func list(root string, out, stderr io.Writer) (int, error) {
 		}
 		selection := "default"
 		if s.Version == 1 {
-			selection = "legacy"
+			selection = "unknown"
 		}
 		if s.PR != "" {
 			selection = "PR #" + s.PR
 		} else if s.Ref != "" {
 			selection = s.Ref
+		}
+		if s.Version == 3 {
+			parts := []string{}
+			for k, v := range s.Args {
+				if v != "" {
+					parts = append(parts, k+"="+v)
+				}
+			}
+			sort.Strings(parts)
+			if len(parts) > 0 {
+				selection = strings.Join(parts, ", ")
+			}
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", s.Env.Name, s.Repo, display(selection), display(status), len(s.Env.Kits))
 	}

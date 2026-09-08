@@ -101,12 +101,20 @@
 
 ---@class (exact) SupContext
 ---@field repo string GitHub owner/repository.
----@field name string Resolved sandbox name.
----@field ref string Empty when not selected.
----@field pr string PR number, or empty when not selected.
+---@field name string Base name in name(ctx); resolved sandbox name in defaults(ctx).
+---@field args table<string, string> Resolved declared arguments; absent optional keys are nil.
+
+---@class (exact) SupConfigArg
+---@field description? string
+---@field default? string
+---@field required? boolean
+---@field choices? string[]
+---@field pattern? string Go RE2 pattern matched against the full value.
 
 ---@class (exact) SupConfig
 ---@field kits? table<string, string> Friendly aliases for kit sources.
+---@field args? table<string, SupConfigArg> Static argument declarations.
+---@field name? fun(ctx: SupContext): string Custom name; --name overrides this callback.
 ---@field defaults? SupEnvironment|fun(ctx: SupContext): SupEnvironment
 ---@field repos? table<string, SupEnvironmentOverride> Exact repository matches.
 ---@field configure? fun(ctx: SupContext): SupEnvironment Legacy; cannot be combined with defaults or repos.

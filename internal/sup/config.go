@@ -13,13 +13,42 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-type ConfigContext struct{ Repo, Name, Ref, PR string }
+type ConfigContext struct {
+	Repo, Name string
+	Args       map[string]string
+}
+
+type loadedConfig struct {
+	L            *lua.LState
+	table        *lua.LTable
+	cancel       context.CancelFunc
+	declarations map[string]ConfigArg
+}
+
+func (c *loadedConfig) Close() { c.cancel(); c.L.Close() }
 
 func configure(path string, ctx ConfigContext, extra []string) (*Environment, error) {
+	c, err := loadConfig(path)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	ctx.Args, err = c.arguments(ctx.Args)
+	if err != nil {
+		return nil, err
+	}
+	return c.environment(ctx, extra)
+}
+
+func loadConfig(path string) (_ *loadedConfig, err error) {
 	L := lua.NewState()
-	defer L.Close()
 	timeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	defer func() {
+		if err != nil {
+			cancel()
+			L.Close()
+		}
+	}()
 	L.SetContext(timeout)
 	var config *lua.LTable
 	L.PreloadModule("sup", func(L *lua.LState) int {
@@ -56,13 +85,33 @@ func configure(path string, ctx ConfigContext, extra []string) (*Environment, er
 	}
 	var fieldErr error
 	config.ForEach(func(k, v lua.LValue) {
-		if k.String() != "kits" && k.String() != "configure" && k.String() != "defaults" && k.String() != "repos" {
+		if k.String() != "kits" && k.String() != "configure" && k.String() != "defaults" && k.String() != "repos" && k.String() != "args" && k.String() != "name" {
 			fieldErr = fmt.Errorf("config.%s: unknown field", k.String())
 		}
 	})
 	if fieldErr != nil {
 		return nil, fieldErr
 	}
+	c := &loadedConfig{L: L, table: config, cancel: cancel, declarations: map[string]ConfigArg{}}
+	if v := config.RawGetString("args"); v != lua.LNil {
+		if err = bind(v, reflect.ValueOf(&c.declarations).Elem(), "args", map[*lua.LTable]bool{}); err != nil {
+			return nil, err
+		}
+	}
+	if err = c.validateDeclarations(); err != nil {
+		return nil, err
+	}
+	if v := config.RawGetString("name"); v != lua.LNil {
+		if _, ok := v.(*lua.LFunction); !ok {
+			return nil, errors.New("config.name must be a function")
+		}
+	}
+	return c, nil
+}
+
+func (c *loadedConfig) environment(ctx ConfigContext, extra []string) (*Environment, error) {
+	L, config := c.L, c.table
+	var err error
 	aliases := map[string]string{}
 	if v := config.RawGetString("kits"); v != lua.LNil {
 		if err = bind(v, reflect.ValueOf(&aliases).Elem(), "kits", map[*lua.LTable]bool{}); err != nil {
