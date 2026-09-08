@@ -33,17 +33,21 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if o.help {
-		_, err = io.WriteString(out, Help)
-		return 0, err
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
+		if o.help {
+			io.WriteString(out, Help)
+			fmt.Fprintf(stderr, "sup: config arguments unavailable: %v\n", err)
+			return 0, nil
+		}
 		return 1, err
 	}
 	path := o.config
 	if path == "" {
 		path = defaultConfig(home)
+	}
+	if o.help {
+		return configHelp(path, out, stderr)
 	}
 	var config *loadedConfig
 	defer func() {
@@ -57,6 +61,15 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 			return 1, err
 		}
 		return describeArgs(config, out)
+	}
+	if o.dynamic {
+		config, err = loadConfig(path)
+		if err != nil {
+			return 1, err
+		}
+		if err = config.validateGiven(o.args); err != nil {
+			return 1, err
+		}
 	}
 	root := filepath.Join(xdg("XDG_STATE_HOME", filepath.Join(home, ".local", "state")), "sup")
 	if !filepath.IsAbs(root) {
@@ -73,9 +86,11 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	// Resolve config-defined names before looking up repository state.
 	// Explicit names and saved-name targets bypass config on reconnection.
 	if repo != "" && o.name == "" {
-		config, err = loadConfig(path)
-		if err != nil {
-			return 1, err
+		if config == nil {
+			config, err = loadConfig(path)
+			if err != nil {
+				return 1, err
+			}
 		}
 		ctx.Args, err = config.arguments(o.args)
 		if err != nil {

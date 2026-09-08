@@ -32,10 +32,10 @@ Saved environments reuse their configuration. -d does not start an agent task.
 `
 
 type options struct {
-	target, name, config, command string
-	kits                          []string
-	args                          map[string]string
-	detached, plan, help, force   bool
+	target, name, config, command        string
+	kits                                 []string
+	args                                 map[string]string
+	detached, plan, help, force, dynamic bool
 }
 
 func parse(args []string) (o options, err error) {
@@ -82,6 +82,24 @@ func parse(args []string) (o options, err error) {
 				}
 			}
 		default:
+			if strings.HasPrefix(a, "--") {
+				key, value, inline := strings.Cut(strings.TrimPrefix(a, "--"), "=")
+				if reservedArg(key) {
+					return o, fmt.Errorf("--%s must use launcher option syntax", key)
+				}
+				if !inline {
+					i++
+					if i >= len(args) || strings.HasPrefix(args[i], "--") {
+						return o, fmt.Errorf("--%s requires a value", key)
+					}
+					value = args[i]
+				}
+				if err = putArg(o.args, key, value); err != nil {
+					return o, err
+				}
+				o.dynamic = true
+				continue
+			}
 			if strings.HasPrefix(a, "-") {
 				return o, fmt.Errorf("unknown option: %s", a)
 			}
@@ -179,4 +197,12 @@ func putArg(args map[string]string, key, value string) error {
 	}
 	args[key] = value
 	return nil
+}
+
+func reservedArg(key string) bool {
+	switch key {
+	case "help", "detached", "force", "plan", "kit", "name", "config", "arg":
+		return true
+	}
+	return false
 }

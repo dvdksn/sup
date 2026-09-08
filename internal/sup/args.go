@@ -21,6 +21,9 @@ type ConfigArg struct {
 
 func (c *loadedConfig) validateDeclarations() error {
 	for key, d := range c.declarations {
+		if reservedArg(key) {
+			return fmt.Errorf("args.%s conflicts with launcher flag --%s", key, key)
+		}
 		if !argNamePattern.MatchString(key) {
 			return fmt.Errorf("args.%s: invalid argument name", key)
 		}
@@ -59,14 +62,10 @@ func (d ConfigArg) check(key, value string) error {
 }
 func (c *loadedConfig) arguments(given map[string]string) (map[string]string, error) {
 	result := map[string]string{}
+	if err := c.validateGiven(given); err != nil {
+		return nil, err
+	}
 	for key, value := range given {
-		d, ok := c.declarations[key]
-		if !ok {
-			return nil, fmt.Errorf("unknown argument %q; use sup args to inspect the config", key)
-		}
-		if err := d.check(key, value); err != nil {
-			return nil, err
-		}
 		result[key] = value
 	}
 	for key, d := range c.declarations {
@@ -124,7 +123,7 @@ func describeArgs(c *loadedConfig, out io.Writer) (int, error) {
 	}
 	sort.Strings(keys)
 	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ARG\tDEFAULT\tREQUIRED\tCHOICES / PATTERN\tDESCRIPTION")
+	fmt.Fprintln(w, "FLAG\tDEFAULT\tREQUIRED\tCHOICES / PATTERN\tDESCRIPTION")
 	for _, key := range keys {
 		d := c.declarations[key]
 		def := "—"
@@ -138,7 +137,7 @@ func describeArgs(c *loadedConfig, out io.Writer) (int, error) {
 			}
 			constraint += d.Pattern
 		}
-		fmt.Fprintf(w, "%s\t%s\t%t\t%s\t%s\n", key, def, d.Required, display(constraint), display(d.Description))
+		fmt.Fprintf(w, "%s\t%s\t%t\t%s\t%s\n", "--"+key, def, d.Required, display(constraint), display(d.Description))
 	}
 	return 0, w.Flush()
 }
@@ -162,4 +161,57 @@ func matchArgs(state snapshot, given map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func (c *loadedConfig) validateGiven(given map[string]string) error {
+	for key, value := range given {
+		d, ok := c.declarations[key]
+		if !ok {
+			return fmt.Errorf("unknown config argument --%s; use sup -h or sup args to inspect the config", key)
+		}
+		if err := d.check(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func configHelp(path string, out, stderr io.Writer) (int, error) {
+	if _, err := io.WriteString(out, Help); err != nil {
+		return 1, err
+	}
+	c, err := loadConfig(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "sup: config arguments unavailable: %s\n", strings.SplitN(err.Error(), "\n", 2)[0])
+		return 0, nil
+	}
+	defer c.Close()
+	if len(c.declarations) == 0 {
+		return 0, nil
+	}
+	fmt.Fprintln(out, "\nConfig arguments (all take string values):")
+	keys := make([]string, 0, len(c.declarations))
+	for key := range c.declarations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	w := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
+	for _, key := range keys {
+		d := c.declarations[key]
+		details := display(d.Description)
+		if d.Default != nil {
+			details += fmt.Sprintf(" (default: %q)", *d.Default)
+		}
+		if d.Required {
+			details += " (required)"
+		}
+		if len(d.Choices) > 0 {
+			details += " [" + display(strings.Join(d.Choices, ", ")) + "]"
+		}
+		if d.Pattern != "" {
+			details += " (pattern: " + display(d.Pattern) + ")"
+		}
+		fmt.Fprintf(w, "  --%s VALUE\t%s\n", key, details)
+	}
+	return 0, w.Flush()
 }

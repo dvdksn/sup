@@ -5,7 +5,7 @@ A personal Docker Sandboxes launcher: a Go executable with Lua configuration.
 ```sh
 sup docker/docs                   # Create and attach, or reconnect
 sup docker/runtime-kits --kit task
-sup docker/docs -a pr=12345         # Uses docker-docs-pr-12345
+sup docker/docs --pr 12345         # Uses docker-docs-pr-12345
 sup docker-docs-pr-12345           # Reconnect using saved configuration
 sup docker/docs -d                # Provision without attaching
 sup docker/docs --name docs-test --kit browser --plan
@@ -140,10 +140,12 @@ supported; do not combine it with `sup.setup` in the same file.
 ## Config arguments and naming
 
 ```sh
+sup -h
 sup args
 sup args --config /path/to/config.lua
-sup docker/docs -a pr=123
-sup docker/docs --arg ref=feature/auth
+sup docker/docs --pr 123
+sup docker/docs --ref feature/auth
+sup docker/docs -a pr=123  # Equivalent generic form
 ```
 
 Declare inputs in the top-level `args` table (distinct from a kit's own `args`):
@@ -159,6 +161,17 @@ args = {
 },
 ```
 
+Each declared key automatically becomes a long flag: `pr` creates `--pr VALUE`.
+Both `--pr 123` and `--pr=123` work; all declared flags take string values, even
+when the value is `true` or `false`. No per-argument `flag` property is needed.
+The launcher reserves `help`, `detached`, `force`, `plan`, `kit`, `name`, `config`,
+and `arg`; declarations using those names are rejected.
+
+`sup -h` includes declared flags, descriptions, and constraints. It loads the
+trusted config but does not invoke naming or defaults callbacks or require inputs.
+If the config is missing or broken, launcher help still appears with a brief
+warning. `sup --config PATH -h` uses the selected config.
+
 `sup args` prints descriptions, defaults, required flags, choices, and patterns.
 It executes the trusted config file to register its declarations, but does not
 call `name` or `defaults`, require argument values, contact sbx, or create state.
@@ -166,7 +179,8 @@ Declarations themselves must be valid, including any declared default values.
 
 Every input is a string. `-a` and `--arg` split on the first `=`; values may contain
 more `=` characters, colons, or shell-quoted spaces. Empty values are permitted.
-Unknown and duplicate keys are rejected. Optional declarations may omit both
+Unknown and duplicate keys are rejected, including a key supplied once as a flag
+and again via `-a`. Optional declarations may omit both
 `default` and `required`; `required=true` cannot be combined with a default.
 `choices` validates exact strings. `pattern` uses Go RE2 syntax and matches the
 entire value. Cross-argument rules belong in your Lua callbacks.
@@ -177,9 +191,9 @@ a short hash whenever sanitization or truncation is needed. `--name` bypasses th
 callback. Without a naming callback, all arguments use the same `owner-repo`
 name; values do not automatically get added to it.
 
-The example config adds PR/ref suffixes. The launcher no longer has special
-`--pr`, `--ref`, `ctx.pr`, or `ctx.ref` fields: use `-a pr=123`, declare the inputs,
-and read `ctx.args.pr` / `ctx.args.ref`. New arguments are stored in plaintext
+The example config adds PR/ref suffixes. `--pr` and `--ref` exist because that
+config declares them; the launcher gives them no special meaning. Read their
+values through `ctx.args.pr` / `ctx.args.ref`. New arguments are stored in plaintext
 alongside the resolved environment; use native sbx secret sources for credentials.
 
 ## Editor support and validation
@@ -210,7 +224,7 @@ credentials, kit availability, and approvals.
 ```sh
 sup ls
 sup rm docker/docs
-sup rm docker/docs -a pr=123
+sup rm docker/docs --pr 123
 sup rm docker-docs-pr-123
 sup rm docs-review --force
 ```
@@ -263,14 +277,17 @@ Repository-based commands load the config, validate inputs, and invoke `name`
 (if provided) to locate state. Existing environments then reuse their saved
 snapshot without evaluating `defaults`. Changing naming rules or argument
 defaults can select a different name. Reconnect by saved name to bypass the config
-entirely, even if the config has changed or is unavailable:
+entirely when using no config flags (or only `-a`), even if the config has changed
+or is unavailable. Declared long flags load the config to check their declarations
+and supplied values, even with a saved-name target:
 
 ```sh
 sup docker/docs -a pr=123  # Config resolves docker-docs-pr-123
 sup docker-docs-pr-123     # Saved state; config is not loaded
 ```
 
-Explicit `--name` also bypasses config on reconnect. Supplied argument values
+Explicit `--name` also bypasses config on reconnect unless declared long flags
+are supplied. Supplied argument values
 must match the snapshot; unspecified values keep their saved values. Existing
 names reject `--kit` and `--config`. Use a new name for a different setup.
 Snapshots from older versions remain readable; the oldest lack any selection

@@ -79,7 +79,7 @@ func TestGenericArgCLI(t *testing.T) {
 	if v, ok := o.args["two"]; !ok || v != "" {
 		t.Fatal(o.args)
 	}
-	for _, args := range [][]string{{"a/b", "-a", "missing"}, {"a/b", "-a", "=x"}, {"a/b", "-a", "x=1", "--arg", "x=2"}, {"a/b", "--pr", "1"}, {"a/b", "--ref", "main"}, {"args", "a/b"}, {"args", "-a", "x=1"}} {
+	for _, args := range [][]string{{"a/b", "-a", "missing"}, {"a/b", "-a", "=x"}, {"a/b", "-a", "x=1", "--arg", "x=2"}, {"args", "a/b"}, {"args", "-a", "x=1"}} {
 		if _, err := parse(args); err == nil {
 			t.Fatalf("accepted %v", args)
 		}
@@ -102,7 +102,7 @@ func TestGenericSavedArguments(t *testing.T) {
 			t.Fatal(args, code, err)
 		}
 	}
-	run("a/b", "-a", "flavor=chocolate", "-a", "note=a=b:c", "-d")
+	run("a/b", "--flavor", "chocolate", "--note=a=b:c", "-d")
 	data, err := os.ReadFile(filepath.Join(root, "a-b-chocolate", "state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +111,7 @@ func TestGenericSavedArguments(t *testing.T) {
 	if err != nil || state.Args["flavor"] != "chocolate" || state.Env.Env["NOTE"] != "a=b:c" {
 		t.Fatal(state, err)
 	}
-	run("a/b", "-a", "flavor=chocolate")
+	run("a/b", "--flavor", "chocolate")
 	if _, err := Run([]string{"a/b", "--name", "a-b-chocolate", "-a", "flavor=vanilla"}, nil, &out, &stderr); err == nil {
 		t.Fatal("accepted conflict")
 	}
@@ -126,4 +126,66 @@ func TestGenericSavedArguments(t *testing.T) {
 	}
 	run("a-b-chocolate", "-a", "flavor=chocolate")
 	run("rm", "a-b-chocolate", "-f")
+}
+
+func TestConfigAwareHelp(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("PATH", root)
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	path := luaFile(t, `require('sup').setup({args={
+  pr={description='Pull request',required=true,pattern='[1-9][0-9]*'},
+  browser={description='Browser',default='chromium',choices={'chromium','firefox'}},
+ },name=function()error('must not run')end,defaults=function()error('must not run')end})`)
+	var out, stderr bytes.Buffer
+	code, err := Run([]string{"-h", "--config", path}, nil, &out, &stderr)
+	if code != 0 || err != nil || stderr.Len() != 0 {
+		t.Fatal(code, err, stderr.String())
+	}
+	for _, want := range []string{"Usage:", "--name", "Config arguments", "--pr VALUE", "Pull request", "required", "chromium", "firefox"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s: %s", want, out.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "state")); !os.IsNotExist(err) {
+		t.Fatal("help created state")
+	}
+	for _, broken := range []string{filepath.Join(root, "missing.lua"), luaFile(t, `error('broken config')`)} {
+		out.Reset()
+		stderr.Reset()
+		code, err = Run([]string{"--config", broken, "--help"}, nil, &out, &stderr)
+		if code != 0 || err != nil || !strings.Contains(out.String(), "Usage:") || !strings.Contains(stderr.String(), "config arguments unavailable") {
+			t.Fatal(code, err, out.String(), stderr.String())
+		}
+	}
+}
+func TestDeclaredFlagParsing(t *testing.T) {
+	o, err := parse([]string{"--pr", "123", "docker/docs", "--ref=feature/foo", "--note="})
+	if err != nil || !o.dynamic || o.args["pr"] != "123" || o.args["ref"] != "feature/foo" {
+		t.Fatal(o, err)
+	}
+	if _, ok := o.args["note"]; !ok {
+		t.Fatal("empty flag value lost")
+	}
+	for _, args := range [][]string{{"a/b", "--pr"}, {"a/b", "--pr", "--help"}, {"a/b", "--pr", "123", "-a", "pr=123"}, {"a/b", "--pr=123", "--pr", "456"}} {
+		if _, err := parse(args); err == nil {
+			t.Fatalf("accepted %v", args)
+		}
+	}
+	for _, key := range []string{"help", "name", "kit", "config", "arg", "detached", "force", "plan"} {
+		path := luaFile(t, `return {args={['`+key+`']={}}}`)
+		if c, err := loadConfig(path); err == nil {
+			c.Close()
+			t.Fatalf("accepted reserved key %s", key)
+		}
+	}
+	root := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", root)
+	path := luaFile(t, `return {args={pr={pattern='[1-9][0-9]*'}},defaults=function()error('must not run')end}`)
+	for _, args := range [][]string{{"a/b", "--config", path, "--random", "x"}, {"a/b", "--config", path, "--pr", "oops"}} {
+		var out, stderr bytes.Buffer
+		if _, err := Run(args, nil, &out, &stderr); err == nil || strings.Contains(err.Error(), "must not run") {
+			t.Fatalf("validation failure: %v", err)
+		}
+	}
 }
