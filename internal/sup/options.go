@@ -10,10 +10,12 @@ import (
 
 const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
        sup ls
+       sup completion bash
        sup args [--config PATH]
        sup rm OWNER/REPO|SAVED-NAME [-a KEY=VALUE] [--name NAME] [-f]
 
 Commands:
+  completion bash    Print Bash completion script
   args               Show arguments declared by the Lua config
   ls                 List saved environments and live sandbox status
   rm                 Remove through sbx, then forget saved state

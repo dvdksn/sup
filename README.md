@@ -39,6 +39,21 @@ mkdir -p ~/.config/sup
 cp -n examples/config.lua ~/.config/sup/config.lua
 ```
 
+## Bash completion
+
+Add this to `~/.bashrc` (and run it in your current shell):
+
+```bash
+eval "$(sup completion bash)"
+```
+
+`sup rm <Tab>` completes saved environment names, including PR/ref variants.
+`sup <Tab>` also completes saved names for reconnecting and command names.
+Built-in options and `--config` file paths are completed too. Completion reads
+local saved state without loading Lua or calling sbx; config-defined flags and
+kit aliases are not completed. Works with Bash 3.2+ without bash-completion.
+If your login shell only reads `~/.bash_profile`, source `.bashrc` from there.
+
 ## Lua configuration
 
 `~/.config/sup/config.lua` calls `sup.setup` once:
@@ -248,7 +263,7 @@ keeps saved state. sbx currently reports a declined removal as exit zero plus
 missing sandbox can still be removed this way to clean up credentials and saved
 state. Unknown names are rejected. Repository-based removal loads the config to
 resolve its name; removal by saved name does not load it. Neither evaluates
-`defaults` or creates environment state. `args`, `ls`, and `rm` are reserved command names; an existing environment with
+`defaults` or creates environment state. `args`, `ls`, `rm`, `completion`, and the internal `__complete` are reserved command names; an existing environment with
 one of those names can still be selected using its repo and `--name`.
 
 ## State and execution

@@ -29,6 +29,19 @@ func xdg(key, fallback string) string {
 }
 
 func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
+	if len(args) > 0 && args[0] == "completion" {
+		if len(args) != 2 || args[1] != "bash" {
+			return 1, errors.New("usage: sup completion bash")
+		}
+		_, err := io.WriteString(out, bashCompletion)
+		if err != nil {
+			return 1, err
+		}
+		return 0, nil
+	}
+	if len(args) > 0 && args[0] == "__complete" {
+		return completeNames(args[1:], out)
+	}
 	o, err := parse(args)
 	if err != nil {
 		return 1, err

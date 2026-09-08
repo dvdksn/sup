@@ -33,4 +33,8 @@ result=$?
 set -e
 [ "$result" -eq 7 ]
 [ ! -d "$XDG_STATE_HOME/sup/.locks/docker-docs" ]
+# Completion must not invoke sbx or load the broken config.
+rm -f "$SUP_TEST_LOG"
+SUP="$SUP" bash tests/completion.bash
+[ ! -f "$SUP_TEST_LOG" ]
 echo 'integration tests passed'
