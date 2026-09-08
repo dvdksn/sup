@@ -9,7 +9,14 @@ import (
 )
 
 const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
+       sup ls
+       sup rm OWNER/REPO|SAVED-NAME [--pr NUMBER|--ref REF] [--name NAME] [-f]
 
+Commands:
+  ls                 List saved environments and live sandbox status
+  rm                 Remove through sbx, then forget saved state
+
+Options:
   -d, --detached      Provision without attaching (sbx env create)
   --kit SOURCE|ALIAS  Add a kit (repeatable, creation only)
   --name NAME        Override the derived environment name
@@ -17,18 +24,23 @@ const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
   --pr NUMBER        Pull request (adds a PR suffix)
   --config PATH      Config file (default: ~/.config/sup/config.lua)
   --plan             Show sbx's plan without saving or provisioning
+  -f, --force        Skip sbx removal confirmation (rm only)
   -h, --help         Show this help
 
 Saved environments reuse their configuration. -d does not start an agent task.
 `
 
 type options struct {
-	target, name, ref, pr, config string
-	kits                          []string
-	detached, plan, help          bool
+	target, name, ref, pr, config, command string
+	kits                                   []string
+	detached, plan, help, force            bool
 }
 
 func parse(args []string) (o options, err error) {
+	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm") {
+		o.command = args[0]
+		args = args[1:]
+	}
 	seen := map[string]bool{}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -37,6 +49,8 @@ func parse(args []string) (o options, err error) {
 			o.help = true
 		case "-d", "--detached":
 			o.detached = true
+		case "-f", "--force":
+			o.force = true
 		case "--plan":
 			o.plan = true
 		case "--kit", "--name", "--ref", "--pr", "--config":
@@ -72,6 +86,18 @@ func parse(args []string) (o options, err error) {
 	}
 	if o.help {
 		return o, nil
+	}
+	if o.command == "ls" {
+		if o.target != "" || o.name != "" || o.ref != "" || o.pr != "" || o.config != "" || len(o.kits) > 0 || o.detached || o.plan || o.force {
+			return o, errors.New("sup ls takes no arguments")
+		}
+		return o, nil
+	}
+	if o.force && o.command != "rm" {
+		return o, errors.New("--force is only supported by sup rm")
+	}
+	if o.command == "rm" && (o.config != "" || len(o.kits) > 0 || o.detached || o.plan) {
+		return o, errors.New("sup rm does not accept creation options or --plan")
 	}
 	if o.target == "" {
 		return o, errors.New(Help)

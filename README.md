@@ -149,6 +149,37 @@ nested fields, with errors such as `environment.sandboxOptions.cpus: expected
 integer, got string`. sbx remains responsible for final semantic validation,
 credentials, kit availability, and approvals.
 
+## Listing and removal
+
+```sh
+sup ls
+sup rm docker/docs
+sup rm docker/docs --pr 123
+sup rm docker-docs-pr-123
+sup rm docs-review --force
+```
+
+`sup ls` lists saved environments with their repository, PR/ref selection, live
+status from `sbx ls --json`, and number of kits. Sandboxes created outside sup are
+omitted. A saved environment absent from sbx is `missing`. If sbx is unavailable,
+saved rows are still shown with `unknown` status, a warning, and a nonzero exit.
+No Lua configuration is evaluated. Corrupt saved entries are reported and skipped.
+
+`sup rm` resolves the same names as creation, then runs `sbx env rm` with the
+saved environment file. sbx shows its destroy plan and requests confirmation.
+`--force` / `-f` explicitly skips confirmation and permits removal while in use.
+No global bindings are pruned. Push any work you want to retain first; the clone
+lives inside the sandbox.
+
+After successful removal, sup checks that the sandbox is absent and deletes its
+two managed state files. Declined or failed removal, or failure to verify absence,
+keeps saved state. sbx currently reports a declined removal as exit zero plus
+`Aborted.` on stderr; sup recognizes that response as cancellation. An already
+missing sandbox can still be removed this way to clean up credentials and saved
+state. Unknown names are rejected; sup never evaluates config to create state for
+removal. `ls` and `rm` are reserved command names; an existing environment with
+one of those names can still be selected using its repo and `--name`.
+
 ## State and execution
 
 `sup` generates `~/.local/state/sup/<name>/sbxenv.yaml` and invokes:
@@ -199,12 +230,12 @@ the parent state directory if necessary and removes temporary plan files.
 State is not a live sandbox inventory. If a sandbox was deleted outside `sup`,
 sbx may create it again. Avoid names already used outside `sup`; this version
 does not query sandbox ownership. No automatic deletion or recreation is
-performed by the wrapper. Use sbx directly with the generated file for deliberate
-removal. Push work you want to keep before removing its sandbox.
+performed by the wrapper. Use `sup rm` for deliberate removal. Push work you want to keep before removing
+its sandbox.
 
 State files are private and updated via rename while a short-lived per-name lock
-is held. The lock releases before sbx runs; concurrent sbx operations remain sbx's
-responsibility. If sup is forcibly killed during snapshot preparation, remove
+is held. The lock releases before create/run attaches; removal holds it through sbx
+teardown and state cleanup. Other concurrent sbx operations remain sbx's responsibility. If sup is forcibly killed during snapshot preparation, remove
 `<state-root>/.locks/<name>` only after checking no process still owns it.
 
 `XDG_CONFIG_HOME` and `XDG_STATE_HOME` override the standard directories.

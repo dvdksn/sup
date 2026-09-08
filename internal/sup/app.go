@@ -36,10 +36,6 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		_, err = io.WriteString(out, Help)
 		return 0, err
 	}
-	repo, name, err := identity(o)
-	if err != nil {
-		return 1, err
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return 1, err
@@ -47,6 +43,13 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	root := filepath.Join(xdg("XDG_STATE_HOME", filepath.Join(home, ".local", "state")), "sup")
 	if !filepath.IsAbs(root) {
 		return 1, errors.New("XDG_STATE_HOME must be an absolute path")
+	}
+	if o.command == "ls" {
+		return list(root, out, stderr)
+	}
+	repo, name, err := identity(o)
+	if err != nil {
+		return 1, err
 	}
 	if err = os.MkdirAll(root, 0700); err != nil {
 		return 1, err
@@ -74,19 +77,8 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	stored := err == nil
 	var state snapshot
 	if stored {
-		dec := json.NewDecoder(bytes.NewReader(data))
-		dec.DisallowUnknownFields()
-		if err = dec.Decode(&state); err != nil {
-			return 1, fmt.Errorf("invalid saved state: %w", err)
-		}
-		var trailing any
-		if err = dec.Decode(&trailing); err != io.EOF {
-			return 1, errors.New("invalid saved state: trailing data")
-		}
-		if (state.Version != 1 && state.Version != 2) || !repoPattern.MatchString(state.Repo) || state.Env.Name != name {
-			return 1, errors.New("unsupported or corrupt saved state")
-		}
-		if err = validate(&state.Env); err != nil {
+		state, err = decodeSnapshot(data, name)
+		if err != nil {
 			return 1, err
 		}
 		if repo != "" && repo != state.Repo {
@@ -107,7 +99,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return 1, err
 		}
-		if repo == "" {
+		if repo == "" || o.command == "rm" {
 			return 1, fmt.Errorf("no saved environment named %s", name)
 		}
 		path := o.config
@@ -131,6 +123,13 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 			return 1, err
 		}
 		return runSBX("plan", path, in, out, stderr)
+	}
+	if o.command == "rm" {
+		path := filepath.Join(dir, "sbxenv.yaml")
+		if err = atomicWrite(lock, path, encoded); err != nil {
+			return 1, err
+		}
+		return remove(state, path, dir, o.force, in, out, stderr)
 	}
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return 1, err
@@ -165,8 +164,9 @@ func atomicWrite(lock, path string, data []byte) error {
 	}
 	return os.Rename(temp, path)
 }
-func runSBX(verb, path string, in io.Reader, out, stderr io.Writer) (int, error) {
-	cmd := exec.Command("sbx", "env", verb, path)
+func runSBX(verb, path string, in io.Reader, out, stderr io.Writer, flags ...string) (int, error) {
+	args := append([]string{"env", verb, path}, flags...)
+	cmd := exec.Command("sbx", args...)
 	cmd.Stdin = in
 	cmd.Stdout = out
 	cmd.Stderr = stderr
@@ -181,4 +181,21 @@ func runSBX(verb, path string, in io.Reader, out, stderr io.Writer) (int, error)
 		return 1, fmt.Errorf("start sbx: %w", err)
 	}
 	return 0, nil
+}
+
+func decodeSnapshot(data []byte, name string) (snapshot, error) {
+	var state snapshot
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&state); err != nil {
+		return state, fmt.Errorf("invalid saved state: %w", err)
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		return state, errors.New("invalid saved state: trailing data")
+	}
+	if (state.Version != 1 && state.Version != 2) || !repoPattern.MatchString(state.Repo) || state.Env.Name != name {
+		return state, errors.New("unsupported or corrupt saved state")
+	}
+	return state, validate(&state.Env)
 }
