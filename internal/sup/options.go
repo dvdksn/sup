@@ -12,11 +12,13 @@ const Help = `Usage: sup OWNER/REPO|SAVED-NAME [options]
        sup ls
        sup completion bash
        sup args [--config PATH]
+       sup kits [--config PATH]
        sup rm OWNER/REPO|SAVED-NAME [-a KEY=VALUE] [--name NAME] [-f]
 
 Commands:
   completion bash    Print Bash completion script
   args               Show arguments declared by the Lua config
+  kits               List kit aliases and sources from the Lua config
   ls                 List saved environments and live sandbox status
   rm                 Remove through sbx, then forget saved state
 
@@ -41,7 +43,7 @@ type options struct {
 }
 
 func parse(args []string) (o options, err error) {
-	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm" || args[0] == "args") {
+	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm" || args[0] == "args" || args[0] == "kits") {
 		o.command = args[0]
 		args = args[1:]
 	}
@@ -120,9 +122,9 @@ func parse(args []string) (o options, err error) {
 		}
 		return o, nil
 	}
-	if o.command == "args" {
+	if o.command == "args" || o.command == "kits" {
 		if o.target != "" || o.name != "" || len(o.args) > 0 || len(o.kits) > 0 || o.detached || o.plan || o.force {
-			return o, errors.New("sup args only accepts --config")
+			return o, fmt.Errorf("sup %s only accepts --config", o.command)
 		}
 		return o, nil
 	}

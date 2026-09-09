@@ -234,6 +234,18 @@ nested fields, with errors such as `environment.sandboxOptions.cpus: expected
 integer, got string`. sbx remains responsible for final semantic validation,
 credentials, kit availability, and approvals.
 
+## Listing kit aliases
+
+```sh
+sup kits
+sup kits --config /path/to/config.lua
+```
+
+Lists the top-level `kits` table as sorted `NAME` / `SOURCE` rows. These are the
+aliases available to `--kit`; this does not list installed kits or fetch a remote
+catalog. Like `sup args`, it loads the trusted Lua config without calling naming
+or defaults callbacks, requiring argument values, invoking sbx, or creating state.
+
 ## Listing and removal
 
 ```sh
@@ -263,7 +275,7 @@ keeps saved state. sbx currently reports a declined removal as exit zero plus
 missing sandbox can still be removed this way to clean up credentials and saved
 state. Unknown names are rejected. Repository-based removal loads the config to
 resolve its name; removal by saved name does not load it. Neither evaluates
-`defaults` or creates environment state. `args`, `ls`, `rm`, `completion`, and the internal `__complete` are reserved command names; an existing environment with
+`defaults` or creates environment state. `args`, `kits`, `ls`, `rm`, `completion`, and the internal `__complete` are reserved command names; an existing environment with
 one of those names can still be selected using its repo and `--name`.
 
 ## State and execution

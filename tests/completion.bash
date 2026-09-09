@@ -29,5 +29,7 @@ check --force rm --f
 check bash completion ''
 check '' ls docker-
 check '' args docker-
-check $'args\ncompletion\nls\nrm\ndocker-docs' ''
+check '' kits docker-
+check --config kits --c
+check $'args\ncompletion\nkits\nls\nrm\ndocker-docs' ''
 check "$XDG_CONFIG_HOME/sup/config.lua" --config "$XDG_CONFIG_HOME/sup/config.l"

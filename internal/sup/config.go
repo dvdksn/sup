@@ -111,12 +111,9 @@ func loadConfig(path string) (_ *loadedConfig, err error) {
 
 func (c *loadedConfig) environment(ctx ConfigContext, extra []string) (*Environment, error) {
 	L, config := c.L, c.table
-	var err error
-	aliases := map[string]string{}
-	if v := config.RawGetString("kits"); v != lua.LNil {
-		if err = bind(v, reflect.ValueOf(&aliases).Elem(), "kits", map[*lua.LTable]bool{}); err != nil {
-			return nil, err
-		}
+	aliases, err := c.kitAliases()
+	if err != nil {
+		return nil, err
 	}
 	envTable, err := compose(L, config, ctx)
 	if err != nil {

@@ -68,10 +68,13 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 			config.Close()
 		}
 	}()
-	if o.command == "args" {
+	if o.command == "args" || o.command == "kits" {
 		config, err = loadConfig(path)
 		if err != nil {
 			return 1, err
+		}
+		if o.command == "kits" {
+			return describeKits(config, out)
 		}
 		return describeArgs(config, out)
 	}

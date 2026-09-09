@@ -11,7 +11,7 @@ _sup_complete() {
         fi
         if ((i == 1)); then
             case $word in
-                rm|ls|args|completion) command=$word; continue ;;
+                rm|ls|args|kits|completion) command=$word; continue ;;
             esac
         fi
         case $word in
@@ -35,11 +35,11 @@ _sup_complete() {
     case $command in
         completion) [[ -z $target ]] && words='bash' ;;
         ls) words='-h --help' ;;
-        args) words='--config -h --help' ;;
+        args|kits) words='--config -h --help' ;;
         rm) words='-a --arg --name -f --force -h --help' ;;
         '') words='-d --detached --kit --name -a --arg --config --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
-                words='args completion ls rm'
+                words='args completion kits ls rm'
             fi ;;
     esac
     if [[ $cur == -* || $command == completion ]] || ((COMP_CWORD == 1)); then
