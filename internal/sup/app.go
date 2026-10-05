@@ -28,7 +28,7 @@ func xdg(key, fallback string) string {
 	return fallback
 }
 
-func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
+func runLegacy(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	if len(args) > 0 && args[0] == "completion" {
 		if len(args) != 2 || args[1] != "bash" {
 			return 1, errors.New("usage: sup completion bash")

@@ -31,5 +31,5 @@ check '' ls docker-
 check '' args docker-
 check '' kits docker-
 check --config kits --c
-check $'args\ncompletion\nkits\nls\nrm\ndocker-docs' ''
+check $'args\ncompletion\nhistory\ninspect\nkits\nls\nopen\nrecreate\nrm\nstop\ndocker-docs' ''
 check "$XDG_CONFIG_HOME/sup/config.lua" --config "$XDG_CONFIG_HOME/sup/config.l"

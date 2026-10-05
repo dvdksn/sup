@@ -19,3 +19,4 @@ jobs:
       - run: sh tests/integration.sh
         env:
           BASH_BIN: /bin/bash
+      - run: SUP=./bin/sup python3 tests/native.py

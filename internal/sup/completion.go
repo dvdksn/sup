@@ -38,6 +38,12 @@ func completeNames(args []string, out io.Writer) (int, error) {
 		if !entry.IsDir() || !namePattern.MatchString(name) || !strings.HasPrefix(name, args[0]) {
 			continue
 		}
+		if _, err := (projectRuntime{root: root}).load(name); err == nil {
+			if _, err = fmt.Fprintln(out, name); err != nil {
+				return 1, err
+			}
+			continue
+		}
 		data, err := os.ReadFile(filepath.Join(root, name, "state.json"))
 		if err != nil {
 			continue
