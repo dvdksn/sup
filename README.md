@@ -18,7 +18,10 @@ sup ls
 For a fresh installation, `--native` is optional. If you have an existing Lua
 configuration, use it for your first native project; saved native projects are
 recognized automatically. Lua configurations and snapshots remain supported
-through the [legacy interface](docs/legacy.md), including `--config PATH`.
+through the [legacy interface](docs/legacy.md). Use `--legacy` to select it
+explicitly (for example, `sup ls --legacy`); saved legacy names are recognized
+automatically even without the original config. `--config PATH` selects a Lua
+configuration for commands that accept it.
 
 ## Install
 

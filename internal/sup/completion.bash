@@ -15,7 +15,7 @@ _sup_complete() {
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--native|--no-history|--json|--yes|-y|--auto-approve) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--native|--legacy|--no-history|--json|--yes|-y|--auto-approve) ;;
             --*=*) ;;
             --*|-a) value=$word ;;
             -*) ;;
@@ -45,7 +45,7 @@ _sup_complete() {
         history-path|stop|inspect) words='--native -h --help' ;;
         open|recreate) words='--native --via --agent --env-file --env-arg --ref --pr --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
         rm) words='-a --arg --name -f --force -h --help' ;;
-        '') words='-d --detached --kit --name -a --arg --config --native --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
+        '') words='-d --detached --kit --name -a --arg --config --native --legacy --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
                 words='args completion history inspect kits ls open recreate rm stop'
             fi ;;

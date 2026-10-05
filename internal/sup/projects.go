@@ -33,6 +33,7 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
 
 Native project options:
   --native              Select native projects instead of legacy Lua configuration
+  --legacy              Select the old Lua/snapshot interface explicitly
   --name NAME           Project and sandbox name (default: owner-repo)
   --env-file PATH       Native SBX environment file or directory (repeatable)
   --env-arg KEY=VALUE    Native environment argument (repeatable)
@@ -92,6 +93,13 @@ func (e processExit) Error() string { return fmt.Sprintf("command exited with st
 
 // Lua remains a compatibility route. Native projects do not pass through its schema.
 func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
+	for i, arg := range args {
+		if arg == "--legacy" {
+			remaining := append([]string{}, args[:i]...)
+			remaining = append(remaining, args[i+1:]...)
+			return runLegacy(remaining, in, out, stderr)
+		}
+	}
 	if len(args) > 0 && args[0] == "__history" {
 		if len(args) != 3 || !namePattern.MatchString(args[1]) || !filepath.IsAbs(args[2]) {
 			return 1, errors.New("invalid internal history arguments")
@@ -125,6 +133,8 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 			if _, name, idErr := identity(optionsForNative(options)); idErr == nil {
 				if _, err := os.Stat(filepath.Join(stateRoot, name, "project.json")); err == nil {
 					native = true
+				} else if _, err := os.Stat(filepath.Join(stateRoot, name, "state.json")); err == nil {
+					return runLegacy(args, in, out, stderr)
 				}
 			}
 		}
