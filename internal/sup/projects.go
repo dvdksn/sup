@@ -497,11 +497,8 @@ func (r projectRuntime) overlay(p *projectRecord, path string) error {
 }
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 func (r projectRuntime) envArgs(p *projectRecord, verb string, extra ...string) []string {
-	args := []string{"env", verb}
-	for _, f := range p.Files {
-		args = append(args, f.Path)
-	}
-	args = append(args, filepath.Join(r.root, p.Name, "project.sbxenv.yaml"), "--name", p.Name)
+	// env exec parses flags before its file operands and command separator.
+	args := []string{"env", verb, "--name", p.Name}
 	keys := []string{}
 	for key := range p.Args {
 		keys = append(keys, key)
@@ -510,6 +507,10 @@ func (r projectRuntime) envArgs(p *projectRecord, verb string, extra ...string) 
 	for _, key := range keys {
 		args = append(args, "--env-arg", key+"="+p.Args[key])
 	}
+	for _, file := range p.Files {
+		args = append(args, file.Path)
+	}
+	args = append(args, filepath.Join(r.root, p.Name, "project.sbxenv.yaml"))
 	return append(args, extra...)
 }
 func (r projectRuntime) history(p *projectRecord) error {
@@ -732,7 +733,8 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 		p.MachineID = ""
 		p.HerdrWorkspace = ""
 	}
-	if _, err = r.check(p, false); err != nil {
+	live, err := r.check(p, false)
+	if err != nil {
 		return err
 	}
 	if err = r.overlay(p, overlay); err != nil {
@@ -741,11 +743,18 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 	if err = r.save(p); err != nil {
 		return err
 	}
-	extras := []string{"--detached"}
-	if o.approve {
-		extras = append(extras, "--auto-approve")
+	var runErr error
+	if live == nil {
+		extras := []string{"--detached"}
+		if o.approve {
+			extras = append(extras, "--auto-approve")
+		}
+		_, runErr = r.command("sbx", false, r.envArgs(p, "run", extras...)...)
+	} else {
+		// Existing machines already have their native setup. env exec starts a
+		// stopped machine without repeating host provisioning or its approvals.
+		_, runErr = r.command("sbx", false, r.envArgs(p, "exec", "--", "true")...)
 	}
-	_, runErr := r.command("sbx", false, r.envArgs(p, "run", extras...)...)
 	items, err := r.inventory()
 	if err != nil {
 		return errors.Join(runErr, err)
@@ -791,13 +800,13 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 		_, err = r.command("ssh", false, "-t", p.Name+".sbx", "cd "+shellQuote(p.CWD)+" && exec \"${SHELL:-/bin/bash}\" -il")
 		return err
 	}
-	agent := o.agent
-	if agent == "shell" {
-		agent = "bash"
-	}
-	args := []string{"exec", "-it", "--workdir", p.CWD, p.Name, agent}
+	args := []string{"exec", "-it", "--workdir", p.CWD, p.Name, "bash"}
 	if o.agent == "shell" {
 		args = append(args, "-il")
+	} else {
+		// The custom kit publishes its environment through login-shell profiles.
+		// Agent is an enum; cwd is quoted independently of the host command argv.
+		args = append(args, "-lc", "cd "+shellQuote(p.CWD)+" && exec "+o.agent)
 	}
 	_, err = r.command("sbx", false, args...)
 	return err

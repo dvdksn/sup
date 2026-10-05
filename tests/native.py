@@ -27,13 +27,16 @@ if program=='sbx':
    state['next']+=1
    state['sandboxes'].append({'name':name,'id':'sandbox-'+str(state['next']),'status':'running'})
    save()
-   files=args[2:args.index('--name')]
+   files=[arg for arg in args[2:] if arg.startswith('/') and pathlib.Path(arg).is_file()]
    overlay=json.loads(pathlib.Path(files[-1]).read_text())
    for hook in overlay.get('lifecycle',{}).get('postCreate',[]):
     result=subprocess.run(hook['command'],shell=True)
     if result.returncode: sys.exit(result.returncode)
   else: found['status']='running'; save()
   sys.exit()
+ if args[:2]==['env','exec']:
+  assert args[2]=='--name', 'env exec requires flags before file operands'
+  next(s for s in state['sandboxes'] if s['name']==value('--name'))['status']='running';save();sys.exit()
  if args[:2]==['env','rm']:
   if os.environ.get('CANCEL_REMOVE'): print('Aborted.',file=sys.stderr); sys.exit()
   state['sandboxes']=[s for s in state['sandboxes'] if s['name']!=value('--name')]; save(); sys.exit()
@@ -89,6 +92,7 @@ class NativeProjects(unittest.TestCase):
   self.run_sup('stop','docker-docs')
   self.run_sup('docker-docs','--agent','claude')
   self.assertEqual(self.record()['sandboxId'],original_id)
+  self.assertTrue(any(c[:3]==['sbx','env','exec'] for c in self.calls()))
   self.run_sup('rm','docker-docs','--force')
   self.assertEqual((history/'conversation.jsonl').read_text(),'keep')
   self.assertTrue(self.record()['removed'])
@@ -99,7 +103,7 @@ class NativeProjects(unittest.TestCase):
   self.assertEqual(self.record()['args']['model'],'x = y')
   calls=self.calls()
   self.assertTrue(any('model=x = y' in c for c in calls))
-  self.assertTrue(any(c==['sbx','exec','-it','--workdir','/home/agent/workspace','docker-docs','claude'] for c in calls))
+  self.assertTrue(any(c==['sbx','exec','-it','--workdir','/home/agent/workspace','docker-docs','bash','-lc',"cd '/home/agent/workspace' && exec claude"] for c in calls))
   overlay=json.loads((self.root/'state/sup/docker-docs/project.sbxenv.yaml').read_text())
   self.assertEqual(set(overlay),{'schemaVersion','name','kits','env','lifecycle'})
   self.run_sup('history','clear','docker-docs','--yes',code=1)

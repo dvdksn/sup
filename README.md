@@ -75,6 +75,11 @@ use any native SBX feature; your choice to add workspace mounts applies normally
 The bundled environment has no host repository mounts.
 
 `--plan` delegates to `sbx env plan` without saving a project or mounting history.
+Creation uses `sbx env run --detached`. Reopening uses native `sbx env exec`
+to start an existing machine without repeating provisioning, host lifecycle
+commands, or creation approval; history is checked again before attachment.
+Custom `initialize` commands therefore run during creation/recreation rather
+than on an ordinary sup reopen.
 `-d` starts and prepares the machine without opening an agent. `-y` passes native
 SBX creation approval; `--force` passes removal approval. Terminal mode defaults
 to Codex; `--agent claude` and `--agent shell` select the other entry points.
