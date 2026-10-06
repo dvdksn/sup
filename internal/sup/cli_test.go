@@ -46,4 +46,12 @@ func TestCompletionOffersSavedRepositoriesAndNames(t *testing.T) {
 			t.Fatal(prefix, out.String(), code, err)
 		}
 	}
+	if err := f.run(t, "rm", "docker/docs", "--force"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	code, err := completeNames([]string{"docker"}, &out)
+	if err != nil || code != 0 || out.Len() != 0 {
+		t.Fatal("removed project remained in completion", out.String(), code, err)
+	}
 }

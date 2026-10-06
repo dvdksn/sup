@@ -112,7 +112,6 @@ func (r projectRuntime) run(o projectOptions) error {
 			return errors.New("sandbox identity changed during provisioning")
 		}
 		p.SandboxID = s.ID
-		p.Removed = false
 		if live == nil {
 			p.Ready = runErr == nil
 		}
@@ -204,13 +203,12 @@ func (r projectRuntime) remove(p *projectRecord, force bool) error {
 		return err
 	}
 	p.SandboxID = ""
-	p.Removed = true
 	p.Ready = false
 	p.HerdrWorkspace = ""
-	if err = r.save(p); err != nil {
-		return err
+	if err = os.RemoveAll(filepath.Dir(r.path(p.Name))); err != nil {
+		return fmt.Errorf("remove saved project %s: %w", p.Name, err)
 	}
-	fmt.Fprintf(r.out, "Removed %s. Sandbox files and sessions are gone; project configuration retained.\n", p.Name)
+	fmt.Fprintf(r.out, "Removed %s.\n", p.Name)
 	return nil
 }
 func (r projectRuntime) list(asJSON bool) error {
@@ -250,9 +248,6 @@ func (r projectRuntime) list(asJSON bool) error {
 		p := rows[i].projectRecord
 		if inventoryErr == nil {
 			rows[i].Status = "missing"
-			if p.Removed {
-				rows[i].Status = "removed"
-			}
 			if s, exists := items[p.Name]; exists {
 				rows[i].Status = s.Status
 				if s.ID != p.SandboxID {

@@ -1,6 +1,7 @@
 package sup
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -150,6 +151,27 @@ func TestFailedCreateCannotOpenAgent(t *testing.T) {
 	f.failCreate = false
 	if err := f.run(t, "recreate", "docker-docs", "--force", "-d"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRemovalForgetsProject(t *testing.T) {
+	f := newProjectFixture(t)
+	f.start(t)
+	original := f.project(t).SandboxID
+	if err := f.run(t, "rm", "docker/docs", "--force"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(f.runtime.path("docker-docs"))); !os.IsNotExist(err) {
+		t.Fatal("removal retained project files", err)
+	}
+	var out bytes.Buffer
+	f.runtime.out = &out
+	if err := f.run(t, "ls", "--json"); err != nil || out.String() != "[]\n" {
+		t.Fatal("removed project remained in the listing", out.String(), err)
+	}
+	f.start(t)
+	if f.project(t).SandboxID == original || f.project(t).Repo != "docker/docs" {
+		t.Fatal("repository could not create a fresh sandbox after removal")
 	}
 }
 

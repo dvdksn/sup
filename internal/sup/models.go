@@ -9,7 +9,6 @@ type projectRecord struct {
 	Name           string `json:"name"`
 	Repo           string `json:"repo"`
 	SandboxID      string `json:"sandboxId,omitempty"`
-	Removed        bool   `json:"removed,omitempty"`
 	Ready          bool   `json:"ready"`
 	MachineID      string `json:"machineId,omitempty"`
 	HerdrWorkspace string `json:"herdrWorkspace,omitempty"`
