@@ -6,13 +6,12 @@ agent sessions, and task worktrees live inside the sandbox.
 ```sh
 sup docker/docs                       # Create or reopen the project and open Codex
 sup docker/docs --agent claude         # Same sandbox, different agent
-sup open docker-docs --agent claude
-sup open docker-docs --agent shell
-sup open docker-docs --via ssh
-sup open docker-docs --via herdr
-sup stop docker-docs
-sup recreate docker-docs               # New machine, retained conversations
-sup rm docker-docs                     # Remove the machine; retain setup/history
+sup docker/docs --agent shell
+sup docker/docs --via ssh
+sup docker/docs --via herdr
+sup stop docker/docs
+sup recreate docker/docs               # New machine, retained conversations
+sup rm docker/docs                     # Remove the machine; retain setup/history
 sup ls
 ```
 
@@ -30,8 +29,14 @@ The embedded environment uses [dvdksn/kit](https://github.com/dvdksn/kit): a she
 Codex, Claude, GitHub cloning, SSH signing, and rumdl. Authenticate the host's
 `gh` and load your SSH key for those capabilities. SBX handles credential
 selection; sup automatically approves creation plans. The clone takes only
-`owner/repo` and makes a shallow default-branch checkout in `/home/agent/workspace`. Fetch additional
-history or branches inside the sandbox when needed.
+`owner/repo` and makes a shallow default-branch checkout in
+`/home/agent/workspace`. Fetch additional history or branches inside the
+sandbox when needed.
+
+The signing mixin requests runtime-provided Git identity. In a live check,
+SBX v0.45.1 accepted the required capability but left Git name/email unset
+despite a configured host identity. Until the runtime supplies those defaults,
+configure them inside the sandbox before committing.
 
 ## Embedded environment
 
@@ -53,13 +58,15 @@ sup docker/docs -d
 ```
 
 `--plan` delegates to `sbx env plan`. Creation uses
-`sbx env run --detached --auto-approve`; reopening uses `sbx env exec` to start the existing machine. `-d` prepares without
-opening an agent. `--force` passes removal approval for `rm` and `recreate`.
+`sbx env run --detached --auto-approve`; reopening uses `sbx env exec` to start
+the existing machine. `-d` prepares without opening an agent. `--force` passes
+removal approval for `rm` and `recreate`.
 `--via` and `--agent` select how to enter the machine for that invocation.
 
 Each repository has one sandbox, named from its owner and repository (for example,
-`docker/docs` becomes `docker-docs`). Repository names are case-insensitive;
-there is no naming override. You can use the repository or saved name to reopen
+`docker/docs` becomes `docker-docs`). Ambiguous, normalized, or long names get
+a short repository hash suffix to distinguish them. Repository names are
+case-insensitive; there is no naming override. You can use the repository or saved name to reopen
 it or manage its lifecycle.
 
 The rendered environment is retained for the machine's lifetime. Reopening uses
@@ -84,9 +91,9 @@ history automatically; there is no export or restore step. If a creation hook
 fails, sup prevents attachment until `recreate` reruns creation successfully.
 
 ```sh
-sup history path docker-docs
-sup stop docker-docs
-sup history clear docker-docs --yes
+sup history path docker/docs
+sup stop docker/docs
+sup history clear docker/docs --yes
 ```
 
 Clearing requires a stopped or removed machine. It removes history files while
@@ -103,8 +110,8 @@ installation, installs its Codex/Claude integrations, and creates a workspace at
 the project directory. Select that machine in Herdr and run agents in its panes.
 Agents started through another frontend are outside those panes.
 
-Stopping disables the machine profile; reopening enables it. Removal forgets the
-profile so recreation can install Herdr into the replacement machine. Herdr is
+Stopping disables the machine profile; opening with `--via herdr` enables it.
+Removal forgets the profile so recreation can install Herdr into the replacement machine. Herdr is
 optional (tested with 0.9.3); its first remote installation may ask for approval.
 `HERDR_BIN_PATH` selects its host executable. No sandbox-detection plugin or WSP
 integration is required.
@@ -115,7 +122,8 @@ Project records and the rendered `sbxenv.yaml` live in `~/.local/state/sup/NAME`
 history lives in `~/.local/share/sup/projects/NAME/history`. XDG environment
 variables override these locations. `sup inspect NAME` prints the record;
 `sup ls --json` adds live status. Sandbox IDs are checked before removal or
-reuse so an unrelated same-name machine is never adopted.
+reuse so an unrelated same-name machine is never adopted. Bash completion
+offers saved repositories as well as sandbox names.
 
 ```sh
 eval "$(sup completion bash)"

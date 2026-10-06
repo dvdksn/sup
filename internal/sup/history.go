@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 )
 
-const historyMount = "/home/agent/project-history"
-
 //go:embed history.sh
 var historyHook string
 

@@ -150,8 +150,7 @@ if [ -z "$herdr_bin" ]; then herdr_bin="$HOME/.local/bin/herdr"; fi
 	}
 	var list struct {
 		Workspaces []struct {
-			ID    string `json:"workspace_id"`
-			Label string `json:"label"`
+			ID string `json:"workspace_id"`
 		} `json:"workspaces"`
 	}
 	if err = json.Unmarshal(data, &list); err != nil {

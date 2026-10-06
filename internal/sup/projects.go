@@ -79,18 +79,9 @@ func (r projectRuntime) run(o projectOptions) error {
 	}
 	if o.command == "recreate" {
 		// Remove with the environment used to create the existing machine.
-		old, err := r.load(name)
-		if err != nil {
+		if err = r.remove(p, o.force); err != nil {
 			return err
 		}
-		if err = r.remove(old, o.force); err != nil {
-			return err
-		}
-		p.SandboxID = ""
-		p.Removed = true
-		p.Ready = false
-		p.MachineID = ""
-		p.HerdrWorkspace = ""
 	}
 	live, err := r.check(p, false)
 	if err != nil {
@@ -215,9 +206,6 @@ func (r projectRuntime) remove(p *projectRecord, force bool) error {
 	return nil
 }
 func (r projectRuntime) manageHistory(p *projectRecord, o projectOptions) error {
-	if p.History == "" {
-		return errors.New("history persistence is disabled for this project")
-	}
 	if o.historyAction == "path" {
 		fmt.Fprintln(r.out, p.History)
 		return nil
@@ -287,13 +275,9 @@ func (r projectRuntime) list(asJSON bool) error {
 		err = json.NewEncoder(r.out).Encode(rows)
 	} else {
 		w := tabwriter.NewWriter(r.out, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "PROJECT\tREPOSITORY\tSTATUS\tHISTORY")
+		fmt.Fprintln(w, "PROJECT\tREPOSITORY\tSTATUS")
 		for _, row := range rows {
-			history := "off"
-			if row.History != "" {
-				history = "persistent"
-			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", row.Name, row.Repo, row.Status, history)
+			fmt.Fprintf(w, "%s\t%s\t%s\n", row.Name, row.Repo, row.Status)
 		}
 		err = w.Flush()
 	}

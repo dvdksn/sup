@@ -13,7 +13,7 @@ import (
 //go:embed completion.bash
 var bashCompletion string
 
-// Completion reads saved project names without contacting SBX.
+// Completion reads saved repositories and names without contacting SBX.
 func completeNames(args []string, out io.Writer) (int, error) {
 	if len(args) != 1 {
 		return 1, errors.New("expected a completion prefix")
@@ -35,16 +35,20 @@ func completeNames(args []string, out io.Writer) (int, error) {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if !entry.IsDir() || !namePattern.MatchString(name) || !strings.HasPrefix(name, args[0]) {
+		if !entry.IsDir() || !namePattern.MatchString(name) {
 			continue
 		}
-		if _, err := (projectRuntime{root: root}).load(name); err == nil {
-			if _, err = fmt.Fprintln(out, name); err != nil {
-				return 1, err
+		p, err := (projectRuntime{root: root}).load(name)
+		if err != nil {
+			continue
+		}
+		for _, candidate := range []string{p.Repo, p.Name} {
+			if strings.HasPrefix(candidate, args[0]) {
+				if _, err = fmt.Fprintln(out, candidate); err != nil {
+					return 1, err
+				}
 			}
-			continue
 		}
-
 	}
 	return 0, nil
 }

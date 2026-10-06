@@ -2,6 +2,7 @@ package sup
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,20 @@ func TestCLIRejectsEnvironmentConfiguration(t *testing.T) {
 	for _, flag := range []string{"--env-file", "--env-arg", "--kit", "--cwd", "--no-history", "--name", "--auto-approve", "-y"} {
 		if _, err := parseProjects([]string{"docker/docs", flag, "value"}); err == nil {
 			t.Fatalf("accepted configuration flag %s", flag)
+		}
+	}
+}
+
+func TestCompletionOffersSavedRepositoriesAndNames(t *testing.T) {
+	f := newProjectFixture(t)
+	t.Setenv("XDG_STATE_HOME", f.home)
+	f.runtime.root = filepath.Join(f.home, "sup")
+	f.start(t)
+	for prefix, want := range map[string]string{"docker/": "docker/docs\n", "docker-": "docker-docs\n"} {
+		var out bytes.Buffer
+		code, err := completeNames([]string{prefix}, &out)
+		if err != nil || code != 0 || out.String() != want {
+			t.Fatal(prefix, out.String(), code, err)
 		}
 	}
 }

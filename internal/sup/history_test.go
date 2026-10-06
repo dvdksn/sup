@@ -46,7 +46,7 @@ esac
 				t.Fatal(err)
 			}
 		}
-		command := strings.ReplaceAll(historyCommand(history), historyMount, mount)
+		command := strings.ReplaceAll(historyCommand(history), "/home/agent/project-history", mount)
 		cmd := exec.Command("sh", "-eu", "-c", command)
 		cmd.Env = append(os.Environ(), "HOME="+home, "SBX_SANDBOX_NAME=docs", "PATH="+bin+":"+os.Getenv("PATH"))
 		if out, err := cmd.CombinedOutput(); err != nil {

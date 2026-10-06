@@ -24,7 +24,8 @@ func identity(target string) (repo, name string, err error) {
 		}
 		name = strings.ReplaceAll(repo, "/", "-")
 		normalized := strings.ReplaceAll(name, "_", "-")
-		if normalized != name || len(name) > 100 {
+		// Hyphens in either component make the owner/repo boundary ambiguous.
+		if normalized != name || strings.Contains(repo, "-") || len(name) > 100 {
 			digest := fmt.Sprintf("%x", sha256.Sum256([]byte(repo)))[:10]
 			if len(normalized) > 89 {
 				normalized = normalized[:89]

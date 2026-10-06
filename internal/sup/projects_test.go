@@ -291,3 +291,31 @@ func TestRepositoryLaunchApprovesAndReusesMachine(t *testing.T) {
 		t.Fatal("unexpected creation or attachment count", creates, agents)
 	}
 }
+
+func TestRepositoriesWithAmbiguousNamesStaySeparate(t *testing.T) {
+	f := newProjectFixture(t)
+	repositories := []string{"a-b/c", "a/b-c", "a/b_c"}
+	names := map[string]bool{}
+	for _, repo := range repositories {
+		if err := f.run(t, repo, "-d"); err != nil {
+			t.Fatal(err)
+		}
+		_, name, err := identity(repo)
+		if err != nil || names[name] {
+			t.Fatal("repositories share a sandbox name", name, err)
+		}
+		names[name] = true
+		p, err := f.runtime.load(name)
+		if err != nil || p.Repo != repo {
+			t.Fatal("repository record was conflated", repo, err)
+		}
+	}
+	for _, repo := range repositories {
+		if err := f.run(t, strings.ToUpper(repo), "-d"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.next != len(repositories) {
+		t.Fatal("reopening created another sandbox", f.next)
+	}
+}

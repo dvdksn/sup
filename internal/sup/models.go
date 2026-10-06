@@ -8,7 +8,7 @@ import (
 type projectRecord struct {
 	Name           string `json:"name"`
 	Repo           string `json:"repo"`
-	History        string `json:"history,omitempty"`
+	History        string `json:"history"`
 	SandboxID      string `json:"sandboxId,omitempty"`
 	Removed        bool   `json:"removed,omitempty"`
 	Ready          bool   `json:"ready"`

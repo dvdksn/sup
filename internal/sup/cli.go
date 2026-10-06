@@ -12,7 +12,7 @@ import (
 const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
        sup open PROJECT [--via terminal|ssh|herdr] [--agent codex|claude|shell]
        sup ls [--json]
-       sup inspect PROJECT
+       sup inspect PROJECT           # Prints the saved project as JSON
        sup stop PROJECT
        sup rm PROJECT [--force]
        sup recreate PROJECT [--force] [options]
@@ -166,8 +166,8 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	if o.command == "history" && o.historyAction == "clear" && !o.yes {
 		return o, errors.New("history clear deletes saved conversations; supply --yes")
 	}
-	if o.json && o.command != "inspect" {
-		return o, errors.New("--json is only available for ls/inspect")
+	if o.json {
+		return o, errors.New("--json is only available for ls")
 	}
 	if o.command == "stop" || o.command == "rm" || o.command == "inspect" || o.command == "history" {
 		if o.detached || o.plan || seen["--via"] || seen["--agent"] {
