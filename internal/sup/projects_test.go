@@ -12,7 +12,7 @@ import (
 
 type projectFixture struct {
 	runtime                   projectRuntime
-	home, envFile             string
+	home                      string
 	live                      map[string]liveSandbox
 	calls                     [][]string
 	next                      int
@@ -22,11 +22,7 @@ type projectFixture struct {
 func newProjectFixture(t *testing.T) *projectFixture {
 	t.Helper()
 	root := t.TempDir()
-	f := &projectFixture{home: root, envFile: filepath.Join(root, "sbxenv.yaml"), live: map[string]liveSandbox{}}
-	if err := os.WriteFile(f.envFile, []byte("schemaVersion: '1'\nargs:\n  repo: {required: true}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	f := &projectFixture{home: root, live: map[string]liveSandbox{}}
 	f.runtime = projectRuntime{root: filepath.Join(root, "state"), dataRoot: filepath.Join(root, "data"), out: io.Discard, stderr: io.Discard, runner: f.command}
 	return f
 }
@@ -76,11 +72,11 @@ func (f *projectFixture) run(t *testing.T, args ...string) error {
 	if err != nil {
 		return err
 	}
-	return f.runtime.run(options, f.home)
+	return f.runtime.run(options)
 }
 func (f *projectFixture) start(t *testing.T) {
 	t.Helper()
-	if err := f.run(t, "docker/docs", "--env-file", f.envFile, "-d"); err != nil {
+	if err := f.run(t, "docker/docs", "-d"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -146,7 +142,7 @@ func TestProjectReopenAndRecreation(t *testing.T) {
 func TestFailedCreateCannotOpenAgent(t *testing.T) {
 	f := newProjectFixture(t)
 	f.failCreate = true
-	if err := f.run(t, "docker/docs", "--env-file", f.envFile); err == nil {
+	if err := f.run(t, "docker/docs"); err == nil {
 		t.Fatal("expected hook failure")
 	}
 	if f.project(t).Ready {
@@ -188,7 +184,7 @@ func TestCancelledRemovalAndUnrelatedSandbox(t *testing.T) {
 func TestGeneratedEnvironmentOwnsHistoryHook(t *testing.T) {
 	f := newProjectFixture(t)
 	f.start(t)
-	data, err := os.ReadFile(filepath.Join(f.runtime.root, "docker-docs", "project.sbxenv.yaml"))
+	data, err := os.ReadFile(f.runtime.envPath("docker-docs"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,10 +193,55 @@ func TestGeneratedEnvironmentOwnsHistoryHook(t *testing.T) {
 		t.Fatal("expected native mounting declared in a readable environment hook")
 	}
 	f = newProjectFixture(t)
-	if err := f.run(t, "docker/docs", "--env-file", f.envFile, "--plan"); err != nil {
+	if err := f.run(t, "docker/docs", "--plan"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(f.runtime.path("docker-docs")); !os.IsNotExist(err) {
 		t.Fatal("plan saved a project", err)
+	}
+}
+
+func TestEmbeddedEnvironmentAndSavedSnapshot(t *testing.T) {
+	f := newProjectFixture(t)
+	config := filepath.Join(f.home, "config")
+	t.Setenv("XDG_CONFIG_HOME", config)
+	if err := os.MkdirAll(filepath.Join(config, "sup"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config, "sup", "sbxenv.yaml"), []byte("external config must be ignored"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.start(t)
+	path := f.runtime.envPath("docker-docs")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(original)
+	for _, required := range []string{`name: "docker-docs"`, `default: "docker/docs"`, "kit-claude-mixin:", "kit-codex-mixin:", "postCreate:"} {
+		if !strings.Contains(content, required) {
+			t.Fatal("incomplete embedded environment", required)
+		}
+	}
+	if strings.Contains(content, "[[ quote") || strings.Contains(content, "[[ indent") || strings.Contains(content, "external config") {
+		t.Fatal("environment was not rendered solely from the bundle")
+	}
+	snapshot := append([]byte("# saved environment\n"), original...)
+	if err := os.WriteFile(path, snapshot, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.run(t, "docker-docs", "-d"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != string(snapshot) {
+		t.Fatal("reopen replaced the existing machine's environment")
+	}
+	if err := f.run(t, "recreate", "docker-docs", "--force", "-d"); err != nil {
+		t.Fatal(err)
+	}
+	after, _ = os.ReadFile(path)
+	if string(after) != string(original) {
+		t.Fatal("recreation did not use the embedded environment")
 	}
 }

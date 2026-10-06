@@ -15,26 +15,21 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
        sup inspect PROJECT
        sup stop PROJECT
        sup rm PROJECT [--force]
-       sup recreate PROJECT [--force] [creation options]
+       sup recreate PROJECT [--force] [options]
        sup history path PROJECT
        sup history clear PROJECT --yes
        sup completion bash
 
 Project options:
   --name NAME           Project and sandbox name (default: owner-repo)
-  --env-file PATH       Native SBX environment file or directory (repeatable)
-  --env-arg KEY=VALUE    Native environment argument (repeatable)
-  --kit SOURCE          Additional native kit source (repeatable)
-  --cwd PATH            Entry directory inside the sandbox
   --via FRONTEND        terminal (default), ssh, or herdr
   --agent AGENT         codex (default), claude, or shell; terminal only
   -d, --detached        Prepare the sandbox and history without attaching
   --plan                Show the native SBX plan without saving a project
   -y, --auto-approve    Pass through SBX plan approval for this invocation
-  --no-history          Disable host history persistence for a new project
   --force               Pass through SBX removal approval for rm/recreate
 
-Defaults: ~/.config/sup/sbxenv.yaml, or the bundled dvdksn/kit environment.
+The environment is embedded in sup; no configuration file is required.
 Project history survives rm and recreate. Only history clear deletes it.
 `
 
@@ -66,7 +61,7 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 	if !filepath.IsAbs(r.root) || !filepath.IsAbs(r.dataRoot) {
 		return 1, errors.New("XDG state and data roots must be absolute")
 	}
-	return projectResult(r.run(options, home))
+	return projectResult(r.run(options))
 }
 func projectResult(err error) (int, error) {
 	var exit processExit
@@ -82,10 +77,8 @@ func projectResult(err error) (int, error) {
 	return 0, nil
 }
 func parseProjects(args []string) (o projectOptions, err error) {
-	o.args = map[string]string{}
 	o.via = "terminal"
 	o.agent = "codex"
-	o.cwd = "/home/agent/workspace"
 	if len(args) > 0 {
 		switch args[0] {
 		case "open", "ls", "inspect", "stop", "rm", "recreate", "history":
@@ -119,40 +112,24 @@ func parseProjects(args []string) (o projectOptions, err error) {
 			o.yes = true
 		case "--auto-approve", "-y":
 			o.approve = true
-		case "--no-history":
-			o.noHistory = true
 		case "--json":
 			o.json = true
-		case "--env-file", "--env-arg", "--name", "--via", "--agent", "--cwd", "--kit":
+		case "--name", "--via", "--agent":
 			i++
 			if i == len(args) || args[i] == "" || strings.HasPrefix(args[i], "--") {
 				return o, fmt.Errorf("%s requires a value", arg)
 			}
-			if seen[arg] && arg != "--env-file" && arg != "--env-arg" && arg != "--kit" {
+			if seen[arg] {
 				return o, fmt.Errorf("%s specified twice", arg)
 			}
 			seen[arg] = true
 			switch arg {
-			case "--env-file":
-				o.files = append(o.files, args[i])
-			case "--env-arg":
-				key, value, ok := strings.Cut(args[i], "=")
-				if !ok {
-					return o, errors.New("--env-arg requires KEY=VALUE")
-				}
-				if err := putArg(o.args, key, value); err != nil {
-					return o, err
-				}
-			case "--kit":
-				o.kits = append(o.kits, args[i])
 			case "--name":
 				o.name = args[i]
 			case "--via":
 				o.via = args[i]
 			case "--agent":
 				o.agent = args[i]
-			case "--cwd":
-				o.cwd = args[i]
 			}
 		default:
 			if strings.HasPrefix(arg, "-") {
@@ -168,7 +145,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		return o, nil
 	}
 	if o.command == "ls" {
-		if o.target != "" || o.name != "" || len(o.files) > 0 || len(o.args) > 0 || len(o.kits) > 0 || o.detached || o.plan || o.force || o.yes || o.approve || o.noHistory || seen["--via"] || seen["--agent"] || seen["--cwd"] {
+		if o.target != "" || o.name != "" || o.detached || o.plan || o.force || o.yes || o.approve || seen["--via"] || seen["--agent"] {
 			return o, errors.New("sup ls only accepts --json")
 		}
 		return o, nil
@@ -185,9 +162,6 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	if seen["--agent"] && o.via != "terminal" {
 		return o, errors.New("--agent is only available with --via terminal")
 	}
-	if !strings.HasPrefix(o.cwd, "/") || strings.IndexByte(o.cwd, 0) >= 0 {
-		return o, errors.New("--cwd must be an absolute sandbox path")
-	}
 	if o.force && o.command != "rm" && o.command != "recreate" {
 		return o, errors.New("--force is only available for rm/recreate")
 	}
@@ -201,7 +175,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		return o, errors.New("--json is only available for ls/inspect")
 	}
 	if o.command == "stop" || o.command == "rm" || o.command == "inspect" || o.command == "history" {
-		if len(o.files) > 0 || len(o.args) > 0 || len(o.kits) > 0 || o.detached || o.plan || o.approve || o.noHistory || o.name != "" || seen["--via"] || seen["--agent"] || seen["--cwd"] {
+		if o.detached || o.plan || o.approve || o.name != "" || seen["--via"] || seen["--agent"] {
 			return o, fmt.Errorf("sup %s does not accept creation or attachment options", o.command)
 		}
 	}

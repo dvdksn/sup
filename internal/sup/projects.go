@@ -12,7 +12,7 @@ import (
 	"text/tabwriter"
 )
 
-func (r projectRuntime) run(o projectOptions, home string) error {
+func (r projectRuntime) run(o projectOptions) error {
 	if o.command == "ls" {
 		return r.list(o.json)
 	}
@@ -35,105 +35,24 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 		return loadErr
 	}
 	if !stored {
-
 		if repo == "" || o.command == "stop" || o.command == "rm" || o.command == "recreate" || o.command == "inspect" || o.command == "history" {
 			return fmt.Errorf("no saved project named %s", name)
 		}
-		p = &projectRecord{Name: name, Repo: repo, Args: map[string]string{"repo": repo}, CWD: o.cwd, Kits: o.kits}
-		if !o.noHistory {
-			p.History = filepath.Join(r.dataRoot, name, "history")
-		}
-	} else {
-		if repo != "" && repo != p.Repo {
-			return fmt.Errorf("project belongs to %s", p.Repo)
-		}
-		if o.command != "recreate" && (len(o.files) > 0 || len(o.kits) > 0 || o.noHistory) {
-			return errors.New("project setup is saved; use recreate to change it")
-		}
-		for key, value := range o.args {
-			if key == "repo" && value != p.Repo {
-				return errors.New("repo argument must match the project repository")
-			}
-			if o.command != "recreate" && p.Args[key] != value {
-				return fmt.Errorf("argument %s differs; use recreate or another --name", key)
-			}
-		}
-		if o.command != "recreate" && o.cwd != "/home/agent/workspace" && o.cwd != p.CWD {
-			return errors.New("entry directory differs; use recreate")
-		}
+		p = &projectRecord{Name: name, Repo: repo, History: filepath.Join(r.dataRoot, name, "history")}
+	} else if repo != "" && repo != p.Repo {
+		return fmt.Errorf("project belongs to %s", p.Repo)
 	}
-	if !stored || o.command == "recreate" {
-		for key, value := range o.args {
-			if key == "repo" && value != p.Repo {
-				return errors.New("repo argument must match project")
-			}
-			p.Args[key] = value
-		}
-		if len(o.kits) > 0 {
-			p.Kits = o.kits
-		}
-		if o.noHistory {
-			p.History = ""
-		}
-		if o.cwd != "/home/agent/workspace" {
-			p.CWD = o.cwd
-		}
-		paths := o.files
-		if len(paths) == 0 && len(p.Files) == 0 {
-			candidate := filepath.Join(xdg("XDG_CONFIG_HOME", filepath.Join(home, ".config")), "sup", "sbxenv.yaml")
-			if _, err := os.Stat(candidate); err == nil {
-				paths = []string{candidate}
-			} else if !os.IsNotExist(err) {
-				return err
-			} else {
-				base := filepath.Join(r.root, name, "base.sbxenv.yaml")
-				if err = writePrivateBytes(base, projectEnvironment); err != nil {
-					return err
-				}
-				paths = []string{base}
-			}
-		}
-		if len(paths) > 0 {
-			p.Files = nil
-			for _, path := range paths {
-				file, err := envFile(path)
-				if err != nil {
-					return err
-				}
-				p.Files = append(p.Files, file)
-			}
-		} else {
-			for i, file := range p.Files {
-				updated, err := envFile(file.Path)
-				if err != nil {
-					return err
-				}
-				p.Files[i] = updated
-			}
-		}
-	}
-	overlay := filepath.Join(r.root, name, "project.sbxenv.yaml")
 	if o.plan {
-		// Use the same directory so relative references and projectDir keep their meaning.
-		if err = os.MkdirAll(filepath.Join(r.root, name), 0700); err != nil {
-			return err
-		}
-		temp, err := os.MkdirTemp(filepath.Join(r.root, name), ".plan-")
+		temp, err := os.MkdirTemp("", "sup-plan-")
 		if err != nil {
 			return err
 		}
 		defer os.RemoveAll(temp)
 		path := filepath.Join(temp, "sbxenv.yaml")
-		if err = r.overlay(p, path); err != nil {
+		if err := r.writeEnvironment(p, path); err != nil {
 			return err
 		}
-		args := r.envArgs(p, "plan")
-		for i, arg := range args {
-			if arg == overlay {
-				args[i] = path
-			}
-		}
-		_, err = r.command("sbx", false, args...)
+		_, err = r.command("sbx", false, "env", "plan", "--name", p.Name, path)
 		return err
 	}
 	if o.command == "inspect" {
@@ -156,24 +75,10 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 		return r.manageMachine(p, "disable")
 	}
 	if o.command == "rm" {
-		if err = r.overlay(p, overlay); err != nil {
-			return err
-		}
 		return r.remove(p, o.force)
 	}
-	if o.command != "recreate" {
-		for _, file := range p.Files {
-			current, err := envFile(file.Path)
-			if err != nil {
-				return err
-			}
-			if current.SHA256 != file.SHA256 {
-				return errors.New("environment file changed; use recreate to apply the new setup")
-			}
-		}
-	}
 	if o.command == "recreate" {
-		// Keep the original manifest and environment for teardown; save replacements only afterward.
+		// Remove with the environment used to create the existing machine.
 		old, err := r.load(name)
 		if err != nil {
 			return err
@@ -194,8 +99,10 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 	if live != nil && !p.Ready {
 		return errors.New("project creation failed; use recreate to rerun its lifecycle hooks")
 	}
-	if err = r.overlay(p, overlay); err != nil {
-		return err
+	if live == nil {
+		if err = r.writeEnvironment(p, r.envPath(p.Name)); err != nil {
+			return err
+		}
 	}
 	if err = r.save(p); err != nil {
 		return err
@@ -253,16 +160,16 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 		if _, err = r.command("sbx", false, "setup", "ssh"); err != nil {
 			return err
 		}
-		_, err = r.command("ssh", false, "-t", p.Name+".sbx", "cd "+shellQuote(p.CWD)+" && exec \"${SHELL:-/bin/bash}\" -il")
+		_, err = r.command("ssh", false, "-t", p.Name+".sbx", "cd "+shellQuote(projectDirectory)+" && exec \"${SHELL:-/bin/bash}\" -il")
 		return err
 	}
-	args := []string{"exec", "-it", "--workdir", p.CWD, p.Name, "bash"}
+	args := []string{"exec", "-it", "--workdir", projectDirectory, p.Name, "bash"}
 	if o.agent == "shell" {
 		args = append(args, "-il")
 	} else {
 		// The custom kit publishes its environment through login-shell profiles.
 		// Agent is an enum; cwd is quoted independently of the host command argv.
-		args = append(args, "-lc", "cd "+shellQuote(p.CWD)+" && exec "+o.agent)
+		args = append(args, "-lc", "cd "+shellQuote(projectDirectory)+" && exec "+o.agent)
 	}
 	_, err = r.command("sbx", false, args...)
 	return err

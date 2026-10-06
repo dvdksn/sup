@@ -1,16 +1,16 @@
 schemaVersion: "1"
-name: dev
+name: [[ quote .Name ]]
 agent: kit-shell
 
 # The project is cloned inside the sandbox. No host repository is mounted.
 args:
   repo:
-    required: true
+    default: [[ quote .Repo ]]
     description: GitHub repository in owner/repo form
     pattern: '^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$'
   revision:
-    default: latest
-    description: Published kit tag; use a commit SHA for a reproducible environment
+    default: e232fcadf472cf3e927dfb7baabe2a79c37b7e63
+    description: Kit build pinned by this sup release
     pattern: '^[A-Za-z0-9_.-]+$'
 
 secrets:
@@ -24,3 +24,12 @@ kits:
   - source: ghcr.io/dvdksn/kit-tools:${{ env.args.revision }}
     args:
       repo: ${{ env.args.repo }}
+
+env:
+  CODEX_SQLITE_HOME: /home/agent/project-history/codex/sqlite
+
+lifecycle:
+  postCreate:
+    - name: Mount project history
+      command: |
+[[ indent (historyCommand .History) ]]

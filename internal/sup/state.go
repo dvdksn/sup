@@ -22,19 +22,11 @@ func (r projectRuntime) load(name string) (*projectRecord, error) {
 	if err = json.Unmarshal(data, &p); err != nil {
 		return nil, fmt.Errorf("invalid project %s: %w", name, err)
 	}
-	if p.Name != name || !namePattern.MatchString(name) || !repoPattern.MatchString(p.Repo) || !strings.HasPrefix(p.CWD, "/") || len(p.Files) == 0 {
+	if p.Name != name || !namePattern.MatchString(name) || !repoPattern.MatchString(p.Repo) {
 		return nil, errors.New("invalid project record")
 	}
-	if p.History != "" && (!filepath.IsAbs(p.History) || strings.Contains(p.History, ":")) {
+	if !filepath.IsAbs(p.History) || strings.Contains(p.History, ":") {
 		return nil, errors.New("invalid project history path")
-	}
-	for _, f := range p.Files {
-		if !filepath.IsAbs(f.Path) {
-			return nil, errors.New("invalid environment file path")
-		}
-	}
-	if p.Args == nil {
-		p.Args = map[string]string{}
 	}
 	return &p, nil
 }

@@ -15,7 +15,7 @@ _sup_complete() {
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--no-history|--json|--yes|-y|--auto-approve) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--json|--yes|-y|--auto-approve) ;;
             --*=*) ;;
             --*) value=$word ;;
             -*) ;;
@@ -23,12 +23,7 @@ _sup_complete() {
         esac
     done
     if [[ -n $value ]]; then
-        if [[ $value == --env-file ]]; then
-            while IFS= read -r candidate; do
-                COMPREPLY+=("$candidate")
-            done < <(compgen -f -- "$cur")
-            compopt -o filenames 2>/dev/null || :
-        elif [[ $value == --via ]]; then
+        if [[ $value == --via ]]; then
             COMPREPLY=($(compgen -W 'terminal ssh herdr' -- "$cur"))
         elif [[ $value == --agent ]]; then
             COMPREPLY=($(compgen -W 'codex claude shell' -- "$cur"))
@@ -42,9 +37,9 @@ _sup_complete() {
         history) words='path clear' ;;
         history-clear) words='--yes -h --help' ;;
         history-path|stop|inspect) words='-h --help' ;;
-        open|recreate) words='--via --agent --env-file --env-arg --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
+        open|recreate) words='--via --agent --plan --force --auto-approve --detached -h --help' ;;
         rm) words='-f --force -h --help' ;;
-        '') words='-d --detached --kit --name --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
+        '') words='-d --detached --name --via --agent --auto-approve --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
                 words='completion history inspect ls open recreate rm stop'
             fi ;;

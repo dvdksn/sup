@@ -164,7 +164,7 @@ if [ -z "$herdr_bin" ]; then herdr_bin="$HOME/.local/bin/herdr"; fi
 		}
 	}
 	if !found {
-		data, err = r.remote(p, "workspace", "create", "--cwd", p.CWD, "--label", p.Name, "--focus")
+		data, err = r.remote(p, "workspace", "create", "--cwd", projectDirectory, "--label", p.Name, "--focus")
 		if err != nil {
 			return err
 		}

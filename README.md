@@ -26,39 +26,40 @@ Build with Go 1.23 or newer. Runtime requires Docker Sandboxes with `sbx env`
 support (tested with v0.45.1). Sup has no external Go dependencies or Python
 runtime dependency.
 
-The default environment uses [dvdksn/kit](https://github.com/dvdksn/kit): a shell,
+The embedded environment uses [dvdksn/kit](https://github.com/dvdksn/kit): a shell,
 Codex, Claude, GitHub cloning, SSH signing, and rumdl. Authenticate the host's
 `gh` and load your SSH key for those capabilities. SBX handles credential
 selection and creation approval. The clone takes only `owner/repo` and makes a
 shallow default-branch checkout in `/home/agent/workspace`. Fetch additional
 history or branches inside the sandbox when needed.
 
-## Environment files
+## Embedded environment
 
-Use `~/.config/sup/sbxenv.yaml`, the bundled environment, or explicit native files:
+The binary embeds [project.sbxenv.yaml](internal/sup/project.sbxenv.yaml). There
+is no environment-file lookup or CLI configuration interface. Kits, credentials,
+and lifecycle hooks are defined in that template; edit it and rebuild sup to
+change the setup. Its kit revision is pinned to a published build.
+
+Sup fills in the repository, project name, and host history location, then writes
+one self-contained native SBX environment to its project state directory. SBX
+handles schema validation, credentials, provisioning, and teardown. The separate
+Claude and Codex artifacts retain the OAuth workaround used by the kit environment.
+Sup does not require an environment file from the kits repository.
 
 ```sh
-sup docker/docs --env-file ./sbxenv.yaml -d
+sup docker/docs
 sup docker/docs --name docs-review --plan
-sup docker/docs --kit registry.example/browser:latest
-sup docker/docs --env-arg revision=FULL_KIT_COMMIT_SHA
+sup docker/docs --name docs-review -d
 ```
 
-Custom files need a `repo` argument. `--env-file` and `--env-arg` are repeatable;
-`--cwd` changes the entry directory for a different kit. Sup passes these files
-to SBX in order, followed by a generated environment overlay with the project
-name, extra kits, and history lifecycle hook. SBX owns configuration validation,
-merging, interpolation, credentials, provisioning, and teardown.
-
 `--plan` delegates to `sbx env plan`. Creation uses `sbx env run --detached`;
-reopening uses `sbx env exec` to start the existing machine. Creation lifecycle
-commands run when creating or recreating the machine. `-d` prepares without
+reopening uses `sbx env exec` to start the existing machine. `-d` prepares without
 opening an agent, `-y` passes creation approval, and `--force` passes removal
-approval. Terminal mode defaults to Codex.
+approval. `--via` and `--agent` select how to enter the machine for that invocation.
 
-Project records retain the selected files, arguments, and entry directory. If
-an environment file changes, use `recreate` to apply it. Custom files must stay
-available. Recreation can take replacement files, arguments, kits, or `--cwd`.
+The rendered environment is retained for the machine's lifetime. Reopening uses
+that saved file; recreation renders the environment embedded in the current
+binary. Updating sup therefore changes the setup when you recreate the sandbox.
 
 ## Conversation persistence
 
@@ -85,7 +86,7 @@ sup history clear docker-docs --yes
 
 Clearing requires a stopped or removed machine. It removes history files while
 retaining the directories and empty history files needed by a stopped machine's
-mount and symlinks. `--no-history` disables persistence for a new project.
+mount and symlinks. Conversation persistence is part of the embedded environment.
 
 History does not back up the repository. Push commits and preserve uncommitted
 files before recreation. Desktop clients may keep their own metadata separately.
@@ -105,7 +106,7 @@ integration is required.
 
 ## State and development
 
-Project records and generated files live in `~/.local/state/sup/NAME`;
+Project records and the rendered `sbxenv.yaml` live in `~/.local/state/sup/NAME`;
 history lives in `~/.local/share/sup/projects/NAME/history`. XDG environment
 variables override these locations. `sup inspect NAME` prints the record;
 `sup ls --json` adds live status. Sandbox IDs are checked before removal or
