@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 )
 
 type herdrMachine struct {
@@ -144,6 +145,14 @@ if [ -z "$herdr_bin" ]; then herdr_bin="$HOME/.local/bin/herdr"; fi
 	if _, err = r.command("sbx", false, "exec", p.Name, "sh", "-lc", script); err != nil {
 		return fmt.Errorf("install remote agent integrations: %w", err)
 	}
+	if err := r.ensureHerdrWorkspace(p); err != nil {
+		return err
+	}
+	fmt.Fprintf(r.out, "Ready: %s. Select its machine in Herdr and run codex or claude in its panes.\n", p.Name)
+	return nil
+}
+
+func (r projectRuntime) ensureHerdrWorkspace(p *projectRecord) error {
 	data, err := r.remote(p, "workspace", "list")
 	if err != nil {
 		return err
@@ -156,35 +165,62 @@ if [ -z "$herdr_bin" ]; then herdr_bin="$HOME/.local/bin/herdr"; fi
 	if err = json.Unmarshal(data, &list); err != nil {
 		return err
 	}
-	found := false
+	available := map[string]bool{}
+	workspaceID := ""
 	for _, w := range list.Workspaces {
-		if w.ID == p.HerdrWorkspace && p.HerdrWorkspace != "" {
-			found = true
+		available[w.ID] = true
+		if w.ID == p.HerdrWorkspace && w.ID != "" {
+			workspaceID = w.ID
 		}
 	}
-	if !found {
-		data, err = r.remote(p, "workspace", "create", "--cwd", projectDirectory, "--label", p.Name, "--focus")
+	if workspaceID == "" {
+		// Herdr starts its server with a workspace already open. Reuse a pane
+		// in the project directory instead of creating a second terminal.
+		data, err = r.remote(p, "pane", "list")
 		if err != nil {
 			return err
 		}
-		var created struct {
-			Workspace struct {
-				ID string `json:"workspace_id"`
-			} `json:"workspace"`
+		var panes struct {
+			Panes []struct {
+				WorkspaceID string `json:"workspace_id"`
+				Cwd         string `json:"cwd"`
+			} `json:"panes"`
 		}
-		if err = json.Unmarshal(data, &created); err != nil {
+		if err = json.Unmarshal(data, &panes); err != nil {
 			return err
 		}
-		if created.Workspace.ID == "" {
-			return errors.New("Herdr created no workspace ID")
-		}
-		p.HerdrWorkspace = created.Workspace.ID
-		if err = r.save(p); err != nil {
-			return err
+		for _, pane := range panes.Panes {
+			if pane.WorkspaceID != "" && available[pane.WorkspaceID] && path.Clean(pane.Cwd) == projectDirectory {
+				workspaceID = pane.WorkspaceID
+				break
+			}
 		}
 	}
-	fmt.Fprintf(r.out, "Ready: %s. Select its machine in Herdr and run codex or claude in its panes.\n", p.Name)
-	return nil
+	if workspaceID != "" {
+		p.HerdrWorkspace = workspaceID
+		if err := r.save(p); err != nil {
+			return err
+		}
+		_, err = r.remote(p, "workspace", "focus", workspaceID)
+		return err
+	}
+	data, err = r.remote(p, "workspace", "create", "--cwd", projectDirectory, "--label", p.Name, "--focus")
+	if err != nil {
+		return err
+	}
+	var created struct {
+		Workspace struct {
+			ID string `json:"workspace_id"`
+		} `json:"workspace"`
+	}
+	if err = json.Unmarshal(data, &created); err != nil {
+		return err
+	}
+	if created.Workspace.ID == "" {
+		return errors.New("Herdr created no workspace ID")
+	}
+	p.HerdrWorkspace = created.Workspace.ID
+	return r.save(p)
 }
 
 const configureRemoteShell = `set -eu
