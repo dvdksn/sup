@@ -9,7 +9,7 @@ args:
     description: GitHub repository in owner/repo form
     pattern: '^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$'
   revision:
-    default: e232fcadf472cf3e927dfb7baabe2a79c37b7e63
+    default: eb6f7871f24df1d5d36b694a1125733f1605ceb9
     description: Kit build pinned by this sup release
     pattern: '^[A-Za-z0-9_.-]+$'
 
