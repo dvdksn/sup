@@ -16,20 +16,19 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
        sup stop PROJECT
        sup rm PROJECT [--force]
        sup recreate PROJECT [--force] [options]
-       sup history path PROJECT
-       sup history clear PROJECT --yes
        sup completion bash
 
 Project options:
   --via FRONTEND        terminal (default), ssh, or herdr
   --agent AGENT         codex (default), claude, or shell; terminal only
-  -d, --detached        Prepare the sandbox and history without attaching
+  -d, --detached        Prepare the sandbox without attaching
   --plan                Show the native SBX plan without saving a project
+  --verbose             Stream the full SBX setup output
   --force               Pass through SBX removal approval for rm/recreate
 
 One sandbox per repository; names are derived from owner/repo.
 Creation plans are approved automatically. The environment is embedded in sup.
-Project history survives rm and recreate. Only history clear deletes it.
+Sessions stay inside the sandbox. Removing or recreating it resets all state.
 `
 
 func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
@@ -56,9 +55,9 @@ func Run(args []string, in io.Reader, out, stderr io.Writer) (int, error) {
 		_, err = io.WriteString(out, projectHelp)
 		return projectResult(err)
 	}
-	r := projectRuntime{root: stateRoot, dataRoot: filepath.Join(xdg("XDG_DATA_HOME", filepath.Join(home, ".local", "share")), "sup", "projects"), in: in, out: out, stderr: stderr}
-	if !filepath.IsAbs(r.root) || !filepath.IsAbs(r.dataRoot) {
-		return 1, errors.New("XDG state and data roots must be absolute")
+	r := projectRuntime{root: stateRoot, in: in, out: out, stderr: stderr, verbose: options.verbose}
+	if !filepath.IsAbs(r.root) {
+		return 1, errors.New("XDG_STATE_HOME must be an absolute path")
 	}
 	return projectResult(r.run(options))
 }
@@ -80,19 +79,9 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	o.agent = "codex"
 	if len(args) > 0 {
 		switch args[0] {
-		case "open", "ls", "inspect", "stop", "rm", "recreate", "history":
+		case "open", "ls", "inspect", "stop", "rm", "recreate":
 			o.command = args[0]
 			args = args[1:]
-		}
-	}
-	if o.command == "history" {
-		if len(args) == 0 {
-			return o, errors.New("usage: sup history path|clear PROJECT")
-		}
-		o.historyAction = args[0]
-		args = args[1:]
-		if o.historyAction != "path" && o.historyAction != "clear" {
-			return o, errors.New("history action must be path or clear")
 		}
 	}
 	seen := map[string]bool{}
@@ -107,8 +96,8 @@ func parseProjects(args []string) (o projectOptions, err error) {
 			o.plan = true
 		case "--force", "-f":
 			o.force = true
-		case "--yes":
-			o.yes = true
+		case "--verbose":
+			o.verbose = true
 		case "--json":
 			o.json = true
 		case "--via", "--agent":
@@ -140,7 +129,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		return o, nil
 	}
 	if o.command == "ls" {
-		if o.target != "" || o.detached || o.plan || o.force || o.yes || seen["--via"] || seen["--agent"] {
+		if o.target != "" || o.detached || o.plan || o.force || o.verbose || seen["--via"] || seen["--agent"] {
 			return o, errors.New("sup ls only accepts --json")
 		}
 		return o, nil
@@ -160,16 +149,13 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	if o.force && o.command != "rm" && o.command != "recreate" {
 		return o, errors.New("--force is only available for rm/recreate")
 	}
-	if o.yes && (o.command != "history" || o.historyAction != "clear") {
-		return o, errors.New("--yes is only available for history clear")
-	}
-	if o.command == "history" && o.historyAction == "clear" && !o.yes {
-		return o, errors.New("history clear deletes saved conversations; supply --yes")
+	if o.command == "inspect" && o.verbose {
+		return o, errors.New("sup inspect does not accept --verbose")
 	}
 	if o.json {
 		return o, errors.New("--json is only available for ls")
 	}
-	if o.command == "stop" || o.command == "rm" || o.command == "inspect" || o.command == "history" {
+	if o.command == "stop" || o.command == "rm" || o.command == "inspect" {
 		if o.detached || o.plan || seen["--via"] || seen["--agent"] {
 			return o, fmt.Errorf("sup %s does not accept creation or attachment options", o.command)
 		}

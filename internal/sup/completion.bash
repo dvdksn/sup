@@ -11,15 +11,15 @@ _sup_complete() {
         fi
         if ((i == 1)); then
             case $word in
-                open|stop|recreate|inspect|history|rm|ls|completion) command=$word; continue ;;
+                open|stop|recreate|inspect|rm|ls|completion) command=$word; continue ;;
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--json|--yes) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--json|--verbose) ;;
             --*=*) ;;
             --*) value=$word ;;
             -*) ;;
-            *) if [[ $command == history && -z $target ]]; then command="history-$word"; else target=$word; fi ;;
+            *) target=$word ;;
         esac
     done
     if [[ -n $value ]]; then
@@ -34,23 +34,22 @@ _sup_complete() {
     case $command in
         completion) [[ -z $target ]] && words='bash' ;;
         ls) words='--json -h --help' ;;
-        history) words='path clear' ;;
-        history-clear) words='--yes -h --help' ;;
-        history-path|stop|inspect) words='-h --help' ;;
-        open) words='--via --agent --plan --detached -h --help' ;;
-        recreate) words='--via --agent --plan --force --detached -h --help' ;;
-        rm) words='-f --force -h --help' ;;
-        '') words='-d --detached --via --agent --plan -h --help'
+        stop) words='--verbose -h --help' ;;
+        inspect) words='-h --help' ;;
+        open) words='--verbose --via --agent --plan --detached -h --help' ;;
+        recreate) words='--verbose --via --agent --plan --force --detached -h --help' ;;
+        rm) words='--verbose -f --force -h --help' ;;
+        '') words='--verbose -d --detached --via --agent --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
-                words='completion history inspect ls open recreate rm stop'
+                words='completion inspect ls open recreate rm stop'
             fi ;;
     esac
-    if [[ $cur == -* || $command == completion || $command == history ]] || ((COMP_CWORD == 1)); then
+    if [[ $cur == -* || $command == completion ]] || ((COMP_CWORD == 1)); then
         while IFS= read -r candidate; do
             COMPREPLY+=("$candidate")
         done < <(compgen -W "$words" -- "$cur")
     fi
-    if [[ -z $target && $cur != -* && ( -z $command || $command == rm || $command == open || $command == recreate || $command == stop || $command == inspect || $command == history-* ) ]]; then
+    if [[ -z $target && $cur != -* && ( -z $command || $command == rm || $command == open || $command == recreate || $command == stop || $command == inspect ) ]]; then
         while IFS= read -r candidate; do
             COMPREPLY+=("$candidate")
         done < <("${COMP_WORDS[0]}" __complete "$cur" 2>/dev/null)

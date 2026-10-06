@@ -8,7 +8,6 @@ import (
 type projectRecord struct {
 	Name           string `json:"name"`
 	Repo           string `json:"repo"`
-	History        string `json:"history"`
 	SandboxID      string `json:"sandboxId,omitempty"`
 	Removed        bool   `json:"removed,omitempty"`
 	Ready          bool   `json:"ready"`
@@ -16,14 +15,15 @@ type projectRecord struct {
 	HerdrWorkspace string `json:"herdrWorkspace,omitempty"`
 }
 type projectOptions struct {
-	command, target, via, agent, historyAction string
-	detached, plan, force, yes, json, help     bool
+	command, target, via, agent                string
+	detached, plan, force, json, help, verbose bool
 }
 type projectRuntime struct {
-	root, dataRoot string
-	in             io.Reader
-	out, stderr    io.Writer
-	runner         func(string, bool, ...string) ([]byte, error)
+	root        string
+	in          io.Reader
+	out, stderr io.Writer
+	verbose     bool
+	runner      func(string, bool, ...string) ([]byte, error)
 }
 type liveSandbox struct {
 	Name   string `json:"name"`

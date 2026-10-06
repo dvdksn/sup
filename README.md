@@ -10,8 +10,8 @@ sup docker/docs --agent shell
 sup docker/docs --via ssh
 sup docker/docs --via herdr
 sup stop docker/docs
-sup recreate docker/docs               # New machine, retained conversations
-sup rm docker/docs                     # Remove the machine; retain setup/history
+sup recreate docker/docs               # Replace the machine; reset its state
+sup rm docker/docs                     # Remove the machine; keep the project definition
 sup ls
 ```
 
@@ -22,7 +22,7 @@ go install ./cmd/sup
 ```
 
 Build with Go 1.23 or newer. Runtime requires Docker Sandboxes with `sbx env`
-support (tested with v0.45.1). Sup has no external Go dependencies or Python
+support (tested with v0.47.0). Sup has no external Go dependencies or Python
 runtime dependency.
 
 The embedded environment uses [dvdksn/kit](https://github.com/dvdksn/kit): a shell,
@@ -45,7 +45,7 @@ is no environment-file lookup or CLI configuration interface. Kits, credentials,
 and lifecycle hooks are defined in that template; edit it and rebuild sup to
 change the setup. Its kit revision is pinned to a published build.
 
-Sup fills in the repository, project name, and host history location, then writes
+Sup fills in the repository and project name, then writes
 one self-contained native SBX environment to its project state directory. SBX
 handles schema validation, credentials, provisioning, and teardown. The separate
 Claude and Codex artifacts retain the OAuth workaround used by the kit environment.
@@ -73,35 +73,43 @@ The rendered environment is retained for the machine's lifetime. Reopening uses
 that saved file; recreation renders the environment embedded in the current
 binary. Updating sup therefore changes the setup when you recreate the sandbox.
 
-## Conversation persistence
+## Sandbox state
 
-The generated environment declares a `postCreate` hook containing ordinary
-shell commands: create the project's host history directory, call `sbx mount`,
-and connect selected agent paths with symlinks. The complete hook is visible in
-SBX's plan and the generated file. It uses no callback into sup, installed
-helper command, or history kit.
+Agent conversations, SQLite databases, configuration, and repository files stay
+inside the sandbox. Stop/start and switching agents retain them. `rm` and
+`recreate` discard them. Sup does not mount agent state onto the host.
 
-The shared mount keeps Codex sessions and archives on one filesystem. Codex's
-SQLite directory and selected Claude conversation/task state also persist.
-Authentication and agent configuration stay in the sandbox and are rebuilt
-by the kit. Existing local conversations are never silently hidden.
+Push commits and preserve any files or conversations you need before removing
+or recreating a sandbox. Desktop clients may keep their own metadata separately.
 
-Mounts survive stop/start through SBX. Removing or recreating the machine keeps
-history automatically; there is no export or restore step. If a creation hook
-fails, sup prevents attachment until `recreate` reruns creation successfully.
+Existing sandboxes keep their original environment until recreation. To remove
+the history mount from a sandbox created by an earlier Sup build, run
+`sup recreate OWNER/REPO`. Sup leaves any previously persisted host files alone;
+it no longer uses or manages them.
+
+## Launch output
+
+Normal launches show brief progress messages. SBX's setup output is saved in
+`~/.local/state/sup/NAME/setup.log`; warnings and errors remain visible. If
+setup fails, Sup also shows the last 20 log lines and the complete log's path.
+`--verbose` streams the full setup output, and `--plan` shows the native plan
+without creating a sandbox. Removal confirmation and agent sessions remain
+interactive.
 
 ```sh
-sup history path docker/docs
-sup stop docker/docs
-sup history clear docker/docs --yes
+sup docker/docs --verbose
+sup docker/docs --plan
 ```
 
-Clearing requires a stopped or removed machine. It removes history files while
-retaining the directories and empty history files needed by a stopped machine's
-mount and symlinks. Conversation persistence is part of the embedded environment.
+The embedded kits are published under `ghcr.io/dvdksn/`. If SBX rejects that
+publisher, allow it in your SBX settings, subject to your organization's policy.
+For the default allowlist:
 
-History does not back up the repository. Push commits and preserve uncommitted
-files before recreation. Desktop clients may keep their own metadata separately.
+```sh
+sbx settings set kit.allowedSources '["docker.io/","ghcr.io/dvdksn/"]'
+```
+
+Preserve any other publishers you already allow. Sup does not change this policy.
 
 ## Herdr
 
@@ -118,9 +126,8 @@ integration is required.
 
 ## State and development
 
-Project records and the rendered `sbxenv.yaml` live in `~/.local/state/sup/NAME`;
-history lives in `~/.local/share/sup/projects/NAME/history`. XDG environment
-variables override these locations. `sup inspect NAME` prints the record;
+Project records, the rendered `sbxenv.yaml`, and setup logs live in
+`~/.local/state/sup/NAME`. `XDG_STATE_HOME` overrides the state root. `sup inspect NAME` prints the record;
 `sup ls --json` adds live status. Sandbox IDs are checked before removal or
 reuse so an unrelated same-name machine is never adopted. Bash completion
 offers saved repositories as well as sandbox names.
@@ -132,8 +139,8 @@ go vet ./...
 go build -o bin/sup ./cmd/sup
 ```
 
-Go tests cover lifecycle decisions at the SBX command boundary and execute the
-actual shell history hook in temporary directories. Real sandbox checks verify
-mount persistence, archive moves, SQLite, and recreation.
+Go tests cover lifecycle decisions at the SBX command boundary and verify setup
+output, failure diagnostics, and exit status using subprocesses. Real sandbox
+checks verify creation, local agent state, and recreation.
 
 MIT. See [LICENSE](LICENSE).

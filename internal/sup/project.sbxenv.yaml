@@ -24,12 +24,3 @@ kits:
   - source: ghcr.io/dvdksn/kit-tools:${{ env.args.revision }}
     args:
       repo: ${{ env.args.repo }}
-
-env:
-  CODEX_SQLITE_HOME: /home/agent/project-history/codex/sqlite
-
-lifecycle:
-  postCreate:
-    - name: Mount project history
-      command: |
-[[ indent (historyCommand .History) ]]

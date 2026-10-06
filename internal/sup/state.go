@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 )
 
@@ -24,9 +23,6 @@ func (r projectRuntime) load(name string) (*projectRecord, error) {
 	}
 	if p.Name != name || !namePattern.MatchString(name) || !repoPattern.MatchString(p.Repo) {
 		return nil, errors.New("invalid project record")
-	}
-	if !filepath.IsAbs(p.History) || strings.Contains(p.History, ":") {
-		return nil, errors.New("invalid project history path")
 	}
 	return &p, nil
 }
