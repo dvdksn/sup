@@ -53,7 +53,7 @@ explicit files:
 
 ```sh
 sup docker/docs --native --env-file ./sbxenv.yaml -d
-sup docker/docs --native --name docs-review --ref feature/docs --plan
+sup docker/docs --native --name docs-review --plan
 sup docker/docs --native --name docs-browser --kit registry.example/browser:latest
 sup docker/docs --native --env-arg revision=FULL_KIT_COMMIT_SHA
 ```
@@ -62,9 +62,10 @@ Without a custom file, sup uses its bundled [environment](internal/sup/project.s
 Custom files need a `repo` environment argument for the project repository. The
 bundled kit clones it to `/home/agent/workspace`; `--cwd` changes the entry
 path for a different kit. `--env-arg KEY=VALUE` forwards other native arguments.
-`--ref` and `--pr` select an initial checkout and are mutually exclusive. They
-share the project's name by default; use `--name` for another project instance.
-Use Git worktrees inside the sandbox for ordinary concurrent tasks.
+The bundled clone mixin accepts only the repository and starts with a shallow
+clone of its default branch. Fetch more history or branches inside the sandbox
+when needed. Use Git worktrees there for ordinary concurrent tasks, or `--name`
+for another project instance.
 
 Sup passes your files to SBX in order, followed by a small generated file with
 the project name, extra kits, and history hook. SBX owns schema validation,
@@ -89,16 +90,17 @@ path. Reopening reuses these inputs. If a file changes, sup asks you to use
 `recreate` to apply it. Keep custom files available; they are references, not
 copies. `recreate` can take new `--env-file`, `--env-arg`, `--kit`, and `--cwd`
 values. It removes the old machine with its original settings, then provisions
-the replacement. Explicitly pass `--env-arg ref=` when switching from a saved
-ref to a PR, or `--env-arg pr=` for the reverse.
+the replacement.
 
 ## Automatic project history
 
 Each project gets a private host directory under
 `~/.local/share/sup/projects/NAME/history`. Sup mounts that directory at
-`/home/agent/project-history` and runs the kit's `sup-history` helper before
-opening an agent. The helper connects selected Codex and Claude state paths
-and points Codex's SQLite index at the same persistent directory.
+`/home/agent/project-history` with native `sbx mount`. Before opening an agent,
+the wrapper connects selected Codex and Claude state paths and points Codex's
+SQLite index at the same persistent directory. No history kit or additional
+installed command is needed. Sessions and archives share this mount so moving
+a conversation between them works normally.
 
 Transcripts, archived sessions, conversation indexes, and selected Claude
 session/task state survive `rm` and `recreate` automatically. There is no export
@@ -118,7 +120,8 @@ and preserve any uncommitted files you need before removal or recreation.
 A resumed conversation still depends on its agent version and referenced files.
 The host history directory is a writable exception to the sandbox boundary;
 `--no-history` on creation disables it for a fully isolated project. A custom
-environment must include the `project-history` mixin unless history is disabled.
+environment needs Python 3.11 or newer for the wrapper's path setup; the bundled
+shell already provides it.
 Desktop clients may retain additional conversation metadata outside the agents'
 state directories; sup does not manage that frontend state.
 

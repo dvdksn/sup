@@ -20,6 +20,9 @@ import (
 //go:embed project.sbxenv.yaml
 var projectEnvironment []byte
 
+//go:embed history_attach.py
+var historyAttachment string
+
 const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
        sup open PROJECT [--via terminal|ssh|herdr] [--agent codex|claude|shell]
        sup ls [--json]
@@ -37,7 +40,6 @@ Native project options:
   --name NAME           Project and sandbox name (default: owner-repo)
   --env-file PATH       Native SBX environment file or directory (repeatable)
   --env-arg KEY=VALUE    Native environment argument (repeatable)
-  --ref REF / --pr N    Initial checkout; task worktrees normally live inside the sandbox
   --kit SOURCE          Additional native kit source (repeatable)
   --cwd PATH            Entry directory inside the sandbox
   --via FRONTEND        terminal (default), ssh, or herdr
@@ -231,7 +233,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 			o.noHistory = true
 		case "--json":
 			o.json = true
-		case "--env-file", "--env-arg", "--name", "--via", "--agent", "--cwd", "--ref", "--pr", "--kit":
+		case "--env-file", "--env-arg", "--name", "--via", "--agent", "--cwd", "--kit":
 			i++
 			if i == len(args) || args[i] == "" || strings.HasPrefix(args[i], "--") {
 				return o, fmt.Errorf("%s requires a value", arg)
@@ -261,10 +263,6 @@ func parseProjects(args []string) (o projectOptions, err error) {
 				o.agent = args[i]
 			case "--cwd":
 				o.cwd = args[i]
-			case "--ref", "--pr":
-				if err := putArg(o.args, strings.TrimPrefix(arg, "--"), args[i]); err != nil {
-					return o, err
-				}
 			}
 		default:
 			if strings.HasPrefix(arg, "-") {
@@ -316,9 +314,6 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		if len(o.files) > 0 || len(o.args) > 0 || len(o.kits) > 0 || o.detached || o.plan || o.approve || o.noHistory || o.name != "" || seen["--via"] || seen["--agent"] || seen["--cwd"] {
 			return o, fmt.Errorf("sup %s does not accept creation or attachment options", o.command)
 		}
-	}
-	if o.args["ref"] != "" && o.args["pr"] != "" {
-		return o, errors.New("ref and pr are mutually exclusive")
 	}
 	return o, nil
 }
@@ -549,8 +544,8 @@ func (r projectRuntime) history(p *projectRecord) error {
 	if _, err = r.command("sbx", false, "mount", p.Name, p.History+":/home/agent/project-history:rw"); err != nil {
 		return fmt.Errorf("attach history: %w", err)
 	}
-	if _, err = r.command("sbx", false, "exec", p.Name, "/usr/local/bin/sup-history", p.Name, "/home/agent/project-history"); err != nil {
-		return fmt.Errorf("connect agent history (project-history kit required): %w", err)
+	if _, err = r.command("sbx", false, "exec", p.Name, "python3", "-c", historyAttachment, p.Name, "/home/agent/project-history"); err != nil {
+		return fmt.Errorf("connect agent history: %w", err)
 	}
 	return nil
 }
@@ -612,9 +607,6 @@ func (r projectRuntime) run(o projectOptions, home string) error {
 				return errors.New("repo argument must match project")
 			}
 			p.Args[key] = value
-		}
-		if p.Args["ref"] != "" && p.Args["pr"] != "" {
-			return errors.New("ref and pr are mutually exclusive")
 		}
 		if len(o.kits) > 0 {
 			p.Kits = o.kits

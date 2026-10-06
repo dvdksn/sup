@@ -8,13 +8,6 @@ args:
     required: true
     description: GitHub repository in owner/repo form
     pattern: '^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$'
-  ref:
-    default: ""
-    description: Initial branch, tag, or commit; mutually exclusive with pr
-  pr:
-    default: ""
-    description: Initial pull request number; mutually exclusive with ref
-    pattern: '^[0-9]*$'
   revision:
     default: latest
     description: Published kit tag; use a commit SHA for a reproducible environment
@@ -31,5 +24,3 @@ kits:
   - source: ghcr.io/dvdksn/kit-tools:${{ env.args.revision }}
     args:
       repo: ${{ env.args.repo }}
-      ref: ${{ env.args.ref }}
-      pr: ${{ env.args.pr }}

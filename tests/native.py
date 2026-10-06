@@ -114,6 +114,17 @@ class NativeProjects(unittest.TestCase):
   self.assertTrue(history.is_dir())
   self.assertEqual(self.run_sup('history','path','docker-docs').stdout.strip(),str(history))
 
+
+ def test_history_uses_native_mount_without_an_installed_helper(self):
+  self.start('-d')
+  history=Path(self.record()['history'])
+  self.assertTrue(any(c==['sbx','mount','docker-docs',str(history)+':/home/agent/project-history:rw'] for c in self.calls()))
+  setup=[c for c in self.calls() if c[:5]==['sbx','exec','docker-docs','python3','-c']]
+  self.assertTrue(setup)
+  self.assertIn('def connect(',setup[0][5])
+  self.assertEqual(setup[0][-2:],['docker-docs','/home/agent/project-history'])
+  self.assertFalse(any('/usr/local/bin/sup-history' in c for c in self.calls()))
+
  def test_history_failure_blocks_attachment_and_recovers(self):
   self.env['FAIL_HISTORY']='1'
   self.run_sup('docker/docs','--native','--env-file',str(self.envfile),code=17)

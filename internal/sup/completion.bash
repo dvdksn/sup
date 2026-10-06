@@ -43,7 +43,7 @@ _sup_complete() {
         history) words='path clear' ;;
         history-clear) words='--yes --native -h --help' ;;
         history-path|stop|inspect) words='--native -h --help' ;;
-        open|recreate) words='--native --via --agent --env-file --env-arg --ref --pr --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
+        open|recreate) words='--native --via --agent --env-file --env-arg --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
         rm) words='-a --arg --name -f --force -h --help' ;;
         '') words='-d --detached --kit --name -a --arg --config --native --legacy --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then

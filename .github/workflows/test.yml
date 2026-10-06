@@ -19,4 +19,5 @@ jobs:
       - run: sh tests/integration.sh
         env:
           BASH_BIN: /bin/bash
+      - run: python3 -m unittest discover -s tests -p test_history.py -v
       - run: SUP=./bin/sup python3 tests/native.py
