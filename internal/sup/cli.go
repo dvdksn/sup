@@ -21,15 +21,14 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
        sup completion bash
 
 Project options:
-  --name NAME           Project and sandbox name (default: owner-repo)
   --via FRONTEND        terminal (default), ssh, or herdr
   --agent AGENT         codex (default), claude, or shell; terminal only
   -d, --detached        Prepare the sandbox and history without attaching
   --plan                Show the native SBX plan without saving a project
-  -y, --auto-approve    Pass through SBX plan approval for this invocation
   --force               Pass through SBX removal approval for rm/recreate
 
-The environment is embedded in sup; no configuration file is required.
+One sandbox per repository; names are derived from owner/repo.
+Creation plans are approved automatically. The environment is embedded in sup.
 Project history survives rm and recreate. Only history clear deletes it.
 `
 
@@ -110,11 +109,9 @@ func parseProjects(args []string) (o projectOptions, err error) {
 			o.force = true
 		case "--yes":
 			o.yes = true
-		case "--auto-approve", "-y":
-			o.approve = true
 		case "--json":
 			o.json = true
-		case "--name", "--via", "--agent":
+		case "--via", "--agent":
 			i++
 			if i == len(args) || args[i] == "" || strings.HasPrefix(args[i], "--") {
 				return o, fmt.Errorf("%s requires a value", arg)
@@ -124,8 +121,6 @@ func parseProjects(args []string) (o projectOptions, err error) {
 			}
 			seen[arg] = true
 			switch arg {
-			case "--name":
-				o.name = args[i]
 			case "--via":
 				o.via = args[i]
 			case "--agent":
@@ -145,7 +140,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		return o, nil
 	}
 	if o.command == "ls" {
-		if o.target != "" || o.name != "" || o.detached || o.plan || o.force || o.yes || o.approve || seen["--via"] || seen["--agent"] {
+		if o.target != "" || o.detached || o.plan || o.force || o.yes || seen["--via"] || seen["--agent"] {
 			return o, errors.New("sup ls only accepts --json")
 		}
 		return o, nil
@@ -175,7 +170,7 @@ func parseProjects(args []string) (o projectOptions, err error) {
 		return o, errors.New("--json is only available for ls/inspect")
 	}
 	if o.command == "stop" || o.command == "rm" || o.command == "inspect" || o.command == "history" {
-		if o.detached || o.plan || o.approve || o.name != "" || seen["--via"] || seen["--agent"] {
+		if o.detached || o.plan || seen["--via"] || seen["--agent"] {
 			return o, fmt.Errorf("sup %s does not accept creation or attachment options", o.command)
 		}
 	}

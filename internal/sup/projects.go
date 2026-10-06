@@ -16,7 +16,7 @@ func (r projectRuntime) run(o projectOptions) error {
 	if o.command == "ls" {
 		return r.list(o.json)
 	}
-	repo, name, err := identity(o.target, o.name)
+	repo, name, err := identity(o.target)
 	if err != nil {
 		return err
 	}
@@ -109,11 +109,7 @@ func (r projectRuntime) run(o projectOptions) error {
 	}
 	var runErr error
 	if live == nil {
-		extras := []string{"--detached"}
-		if o.approve {
-			extras = append(extras, "--auto-approve")
-		}
-		_, runErr = r.command("sbx", false, r.envArgs(p, "run", extras...)...)
+		_, runErr = r.command("sbx", false, r.envArgs(p, "run", "--detached", "--auto-approve")...)
 	} else {
 		// Existing machines already have their native setup. env exec starts a
 		// stopped machine without repeating host provisioning or its approvals.

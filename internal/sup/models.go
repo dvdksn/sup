@@ -16,8 +16,8 @@ type projectRecord struct {
 	HerdrWorkspace string `json:"herdrWorkspace,omitempty"`
 }
 type projectOptions struct {
-	command, target, name, via, agent, historyAction string
-	detached, plan, force, yes, approve, json, help  bool
+	command, target, via, agent, historyAction string
+	detached, plan, force, yes, json, help     bool
 }
 type projectRuntime struct {
 	root, dataRoot string

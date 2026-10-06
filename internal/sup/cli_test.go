@@ -26,7 +26,7 @@ func TestCommandExitStatus(t *testing.T) {
 }
 
 func TestCLIRejectsEnvironmentConfiguration(t *testing.T) {
-	for _, flag := range []string{"--env-file", "--env-arg", "--kit", "--cwd", "--no-history"} {
+	for _, flag := range []string{"--env-file", "--env-arg", "--kit", "--cwd", "--no-history", "--name", "--auto-approve", "-y"} {
 		if _, err := parseProjects([]string{"docker/docs", flag, "value"}); err == nil {
 			t.Fatalf("accepted configuration flag %s", flag)
 		}

@@ -245,3 +245,49 @@ func TestEmbeddedEnvironmentAndSavedSnapshot(t *testing.T) {
 		t.Fatal("recreation did not use the embedded environment")
 	}
 }
+
+func TestRepositoryLaunchApprovesAndReusesMachine(t *testing.T) {
+	f := newProjectFixture(t)
+	if err := f.run(t, "Docker/Docs.git"); err != nil {
+		t.Fatal(err)
+	}
+	original := f.project(t)
+	if original.Repo != "docker/docs" {
+		t.Fatal("repository identity was not normalized", original.Repo)
+	}
+	if err := f.run(t, "docker/docs", "--agent", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	if f.next != 1 || f.project(t).SandboxID != original.SandboxID {
+		t.Fatal("repository spelling or agent choice created another sandbox")
+	}
+	if err := f.run(t, "recreate", "docker/docs", "--force", "-d"); err != nil {
+		t.Fatal(err)
+	}
+	creates, agents := 0, 0
+	for _, call := range f.calls {
+		if len(call) > 2 && call[1] == "env" && call[2] == "run" {
+			creates++
+			approved := false
+			for _, arg := range call {
+				approved = approved || arg == "--auto-approve"
+			}
+			if !approved {
+				t.Fatal("creation required plan approval", call)
+			}
+		}
+		if len(call) > 2 && call[1] == "exec" && call[2] == "-it" {
+			want := "codex"
+			if agents == 1 {
+				want = "claude"
+			}
+			if !strings.HasSuffix(call[len(call)-1], "exec "+want) {
+				t.Fatal("launch did not attach to the selected agent", call)
+			}
+			agents++
+		}
+	}
+	if creates != 2 || agents != 2 {
+		t.Fatal("unexpected creation or attachment count", creates, agents)
+	}
+}

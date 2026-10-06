@@ -15,7 +15,7 @@ _sup_complete() {
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--json|--yes|-y|--auto-approve) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--json|--yes) ;;
             --*=*) ;;
             --*) value=$word ;;
             -*) ;;
@@ -37,9 +37,10 @@ _sup_complete() {
         history) words='path clear' ;;
         history-clear) words='--yes -h --help' ;;
         history-path|stop|inspect) words='-h --help' ;;
-        open|recreate) words='--via --agent --plan --force --auto-approve --detached -h --help' ;;
+        open) words='--via --agent --plan --detached -h --help' ;;
+        recreate) words='--via --agent --plan --force --detached -h --help' ;;
         rm) words='-f --force -h --help' ;;
-        '') words='-d --detached --name --via --agent --auto-approve --plan -h --help'
+        '') words='-d --detached --via --agent --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
                 words='completion history inspect ls open recreate rm stop'
             fi ;;
