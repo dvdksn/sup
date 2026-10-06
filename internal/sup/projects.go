@@ -35,10 +35,10 @@ func (r projectRuntime) run(o projectOptions) error {
 		return loadErr
 	}
 	if !stored {
-		if repo == "" || o.command == "stop" || o.command == "rm" || o.command == "recreate" || o.command == "inspect" || o.command == "history" {
+		if repo == "" || o.command == "stop" || o.command == "rm" || o.command == "recreate" || o.command == "inspect" {
 			return fmt.Errorf("no saved project named %s", name)
 		}
-		p = &projectRecord{Name: name, Repo: repo, History: filepath.Join(r.dataRoot, name, "history")}
+		p = &projectRecord{Name: name, Repo: repo}
 	} else if repo != "" && repo != p.Repo {
 		return fmt.Errorf("project belongs to %s", p.Repo)
 	}
@@ -57,9 +57,6 @@ func (r projectRuntime) run(o projectOptions) error {
 	}
 	if o.command == "inspect" {
 		return json.NewEncoder(r.out).Encode(p)
-	}
-	if o.command == "history" {
-		return r.manageHistory(p, o)
 	}
 	if o.command == "stop" {
 		s, err := r.check(p, false)
@@ -88,7 +85,7 @@ func (r projectRuntime) run(o projectOptions) error {
 		return err
 	}
 	if live != nil && !p.Ready {
-		return errors.New("project creation failed; use recreate to rerun its lifecycle hooks")
+		return errors.New("project creation failed; use sup recreate " + p.Name + " to retry")
 	}
 	if live == nil {
 		if err = r.writeEnvironment(p, r.envPath(p.Name)); err != nil {
@@ -100,11 +97,11 @@ func (r projectRuntime) run(o projectOptions) error {
 	}
 	var runErr error
 	if live == nil {
-		_, runErr = r.command("sbx", false, r.envArgs(p, "run", "--detached", "--auto-approve")...)
-	} else {
+		runErr = r.setup(p, "Creating", r.envArgs(p, "run", "--detached", "--auto-approve")...)
+	} else if live.Status != "running" {
 		// Existing machines already have their native setup. env exec starts a
 		// stopped machine without repeating host provisioning or its approvals.
-		_, runErr = r.command("sbx", false, r.envArgs(p, "exec", "--", "true")...)
+		runErr = r.setup(p, "Starting", r.envArgs(p, "exec", "--", "true")...)
 	}
 	items, err := r.inventory()
 	if err != nil {
@@ -137,6 +134,11 @@ func (r projectRuntime) run(o projectOptions) error {
 	if o.detached {
 		fmt.Fprintf(r.out, "Ready: %s\n", p.Name)
 		return nil
+	}
+	if o.via == "terminal" {
+		fmt.Fprintf(r.stderr, "Opening %s in %s…\n", o.agent, p.Name)
+	} else {
+		fmt.Fprintf(r.stderr, "Connecting to %s via %s…\n", p.Name, o.via)
 	}
 	if o.via == "herdr" {
 		return r.connectHerdr(p)
@@ -179,11 +181,17 @@ func (r projectRuntime) remove(p *projectRecord, force bool) error {
 	rr := r
 	rr.out = io.MultiWriter(r.out, &output)
 	rr.stderr = io.MultiWriter(r.stderr, &errout)
-	if _, err := rr.command("sbx", false, r.envArgs(p, "rm", extras...)...); err != nil {
-		return err
+	var removeErr error
+	if force {
+		removeErr = r.setup(p, "Removing", r.envArgs(p, "rm", extras...)...)
+	} else {
+		_, removeErr = rr.command("sbx", false, r.envArgs(p, "rm", extras...)...)
+	}
+	if removeErr != nil {
+		return removeErr
 	}
 	if strings.Contains(output.String()+errout.String(), "Aborted.") {
-		return errors.New("removal cancelled; project and history retained")
+		return errors.New("removal cancelled; sandbox retained")
 	}
 	items, err := r.inventory()
 	if err != nil {
@@ -202,25 +210,7 @@ func (r projectRuntime) remove(p *projectRecord, force bool) error {
 	if err = r.save(p); err != nil {
 		return err
 	}
-	fmt.Fprintf(r.out, "Removed sandbox %s; project configuration and history retained.\n", p.Name)
-	return nil
-}
-func (r projectRuntime) manageHistory(p *projectRecord, o projectOptions) error {
-	if o.historyAction == "path" {
-		fmt.Fprintln(r.out, p.History)
-		return nil
-	}
-	s, err := r.check(p, true)
-	if err != nil {
-		return err
-	}
-	if s != nil && s.Status != "stopped" {
-		return errors.New("stop the sandbox before clearing history")
-	}
-	if err = r.clearHistory(p); err != nil {
-		return err
-	}
-	fmt.Fprintf(r.out, "Cleared history for %s.\n", p.Name)
+	fmt.Fprintf(r.out, "Removed %s. Sandbox files and sessions are gone; project configuration retained.\n", p.Name)
 	return nil
 }
 func (r projectRuntime) list(asJSON bool) error {

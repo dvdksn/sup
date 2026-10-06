@@ -19,13 +19,9 @@ func (r projectRuntime) envPath(name string) string {
 }
 
 func (r projectRuntime) writeEnvironment(p *projectRecord, path string) error {
-	// Render project identity and history location; SBX interprets the native schema.
+	// Render project identity; SBX interprets the native schema.
 	funcs := template.FuncMap{
-		"quote":          func(value string) string { data, _ := json.Marshal(value); return string(data) },
-		"historyCommand": historyCommand,
-		"indent": func(value string) string {
-			return "        " + strings.ReplaceAll(strings.TrimSuffix(value, "\n"), "\n", "\n        ")
-		},
+		"quote": func(value string) string { data, _ := json.Marshal(value); return string(data) },
 	}
 	env, err := template.New("sbxenv").Delims("[[", "]]").Funcs(funcs).Parse(projectEnvironment)
 	if err != nil {
@@ -38,8 +34,6 @@ func (r projectRuntime) writeEnvironment(p *projectRecord, path string) error {
 	return writePrivateBytes(path, file.Bytes())
 }
 
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
-
 func (r projectRuntime) envArgs(p *projectRecord, verb string, extra ...string) []string {
 	args := []string{"env", verb, "--name", p.Name}
 	if verb == "exec" {
@@ -47,3 +41,5 @@ func (r projectRuntime) envArgs(p *projectRecord, verb string, extra ...string) 
 	}
 	return append(append(args, extra...), r.envPath(p.Name))
 }
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }

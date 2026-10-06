@@ -23,7 +23,7 @@ func newProjectFixture(t *testing.T) *projectFixture {
 	t.Helper()
 	root := t.TempDir()
 	f := &projectFixture{home: root, live: map[string]liveSandbox{}}
-	f.runtime = projectRuntime{root: filepath.Join(root, "state"), dataRoot: filepath.Join(root, "data"), out: io.Discard, stderr: io.Discard, runner: f.command}
+	f.runtime = projectRuntime{root: filepath.Join(root, "state"), out: io.Discard, stderr: io.Discard, runner: f.command}
 	return f
 }
 
@@ -94,14 +94,7 @@ func TestProjectReopenAndRecreation(t *testing.T) {
 	f.start(t)
 	original := f.project(t)
 	if !original.Ready {
-		t.Fatal("successful lifecycle hook did not mark project ready")
-	}
-	if err := os.MkdirAll(original.History, 0700); err != nil {
-		t.Fatal(err)
-	}
-	transcript := filepath.Join(original.History, "conversation.jsonl")
-	if err := os.WriteFile(transcript, []byte("keep"), 0600); err != nil {
-		t.Fatal(err)
+		t.Fatal("successful creation did not mark project ready")
 	}
 	for _, args := range [][]string{{"stop", "docker-docs"}, {"docker-docs", "-d"}} {
 		if err := f.run(t, args...); err != nil {
@@ -117,9 +110,6 @@ func TestProjectReopenAndRecreation(t *testing.T) {
 	if f.project(t).SandboxID == original.SandboxID {
 		t.Fatal("recreation reused the old machine")
 	}
-	if data, err := os.ReadFile(transcript); err != nil || string(data) != "keep" {
-		t.Fatal("history did not survive recreation", err)
-	}
 	creates, reopens := 0, 0
 	for _, call := range f.calls {
 		if len(call) > 2 && call[1] == "env" {
@@ -131,7 +121,7 @@ func TestProjectReopenAndRecreation(t *testing.T) {
 			}
 		}
 		if len(call) > 1 && call[1] == "mount" {
-			t.Fatal("mounting must be owned by SBX's lifecycle hook")
+			t.Fatal("Sup must not mount host directories")
 		}
 	}
 	if creates != 2 || reopens != 1 {
@@ -143,7 +133,7 @@ func TestFailedCreateCannotOpenAgent(t *testing.T) {
 	f := newProjectFixture(t)
 	f.failCreate = true
 	if err := f.run(t, "docker/docs"); err == nil {
-		t.Fatal("expected hook failure")
+		t.Fatal("expected creation failure")
 	}
 	if f.project(t).Ready {
 		t.Fatal("failed creation was marked ready")
@@ -181,18 +171,8 @@ func TestCancelledRemovalAndUnrelatedSandbox(t *testing.T) {
 	}
 }
 
-func TestGeneratedEnvironmentOwnsHistoryHook(t *testing.T) {
+func TestPlanDoesNotSaveProject(t *testing.T) {
 	f := newProjectFixture(t)
-	f.start(t)
-	data, err := os.ReadFile(f.runtime.envPath("docker-docs"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	command := string(data)
-	if !strings.Contains(command, "postCreate:") || !strings.Contains(command, "command: |") || !strings.Contains(command, `sbx mount "$SBX_SANDBOX_NAME"`) {
-		t.Fatal("expected native mounting declared in a readable environment hook")
-	}
-	f = newProjectFixture(t)
 	if err := f.run(t, "docker/docs", "--plan"); err != nil {
 		t.Fatal(err)
 	}
@@ -218,13 +198,18 @@ func TestEmbeddedEnvironmentAndSavedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(original)
-	for _, required := range []string{`name: "docker-docs"`, `default: "docker/docs"`, "kit-claude-mixin:", "kit-codex-mixin:", "postCreate:"} {
+	for _, required := range []string{`name: "docker-docs"`, `default: "docker/docs"`, "kit-claude-mixin:", "kit-codex-mixin:"} {
 		if !strings.Contains(content, required) {
 			t.Fatal("incomplete embedded environment", required)
 		}
 	}
-	if strings.Contains(content, "[[ quote") || strings.Contains(content, "[[ indent") || strings.Contains(content, "external config") {
+	if strings.Contains(content, "[[ quote") || strings.Contains(content, "[[ ") || strings.Contains(content, "external config") {
 		t.Fatal("environment was not rendered solely from the bundle")
+	}
+	for _, forbidden := range []string{"lifecycle:", "CODEX_SQLITE_HOME", "project-history", "sbx mount"} {
+		if strings.Contains(content, forbidden) {
+			t.Fatal("environment still persists agent state on the host", forbidden)
+		}
 	}
 	snapshot := append([]byte("# saved environment\n"), original...)
 	if err := os.WriteFile(path, snapshot, 0600); err != nil {
