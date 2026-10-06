@@ -1,14 +1,11 @@
 package sup
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"text/tabwriter"
 )
 
@@ -71,13 +68,16 @@ func (r projectRuntime) run(o projectOptions) error {
 		}
 		return r.manageMachine(p, "disable")
 	}
-	if o.command == "rm" {
-		return r.remove(p, o.force)
-	}
-	if o.command == "recreate" {
+	if o.command == "rm" || o.command == "recreate" {
 		// Remove with the environment used to create the existing machine.
 		if err = r.remove(p, o.force); err != nil {
+			if errors.Is(err, errRemovalCancelled) {
+				return nil
+			}
 			return err
+		}
+		if o.command == "rm" {
+			return nil
 		}
 	}
 	live, err := r.check(p, false)
@@ -171,26 +171,18 @@ func (r projectRuntime) remove(p *projectRecord, force bool) error {
 			return err
 		}
 	}
-	extras := []string{}
-	if force {
-		extras = append(extras, "--force")
+	if !force {
+		confirmed, err := r.confirmRemoval(p)
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Fprintln(r.stderr, "Cancelled.")
+			return errRemovalCancelled
+		}
 	}
-	// Capture cancellation as SBX currently exits zero when a destroy plan is declined.
-	var output, errout bytes.Buffer
-	rr := r
-	rr.out = io.MultiWriter(r.out, &output)
-	rr.stderr = io.MultiWriter(r.stderr, &errout)
-	var removeErr error
-	if force {
-		removeErr = r.setup(p, "Removing", r.envArgs(p, "rm", extras...)...)
-	} else {
-		_, removeErr = rr.command("sbx", false, r.envArgs(p, "rm", extras...)...)
-	}
-	if removeErr != nil {
-		return removeErr
-	}
-	if strings.Contains(output.String()+errout.String(), "Aborted.") {
-		return errors.New("removal cancelled; sandbox retained")
+	if err := r.setup(p, "Removing", r.envArgs(p, "rm", "--force")...); err != nil {
+		return err
 	}
 	items, err := r.inventory()
 	if err != nil {

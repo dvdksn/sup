@@ -180,7 +180,7 @@ func TestCancelledRemovalAndUnrelatedSandbox(t *testing.T) {
 	f.start(t)
 	original := f.project(t).SandboxID
 	f.cancelRemoval = true
-	if err := f.run(t, "recreate", "docker-docs", "-d"); err == nil {
+	if err := f.run(t, "recreate", "docker-docs", "--force", "-d"); err == nil {
 		t.Fatal("recreation proceeded after cancellation")
 	}
 	if f.next != 1 || f.project(t).SandboxID != original {

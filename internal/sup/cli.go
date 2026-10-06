@@ -24,7 +24,7 @@ Project options:
   -d, --detached        Prepare the sandbox without attaching
   --plan                Show the native SBX plan without saving a project
   --verbose             Stream the full SBX setup output
-  --force               Pass through SBX removal approval for rm/recreate
+  --force               Skip removal confirmation for rm/recreate
 
 One sandbox per repository; names are derived from owner/repo.
 Creation plans are approved automatically. The environment is embedded in sup.
