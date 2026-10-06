@@ -55,6 +55,7 @@ sup rm docker/docs
 
 Stopping preserves the sandbox. Recreation replaces it; removal deletes it.
 Both discard its files and sessions, so push work you want to keep first.
+Sup asks for confirmation before removal or recreation; `--force` skips it.
 
 You can also address an existing project by its sandbox name: `docker-docs`.
 
