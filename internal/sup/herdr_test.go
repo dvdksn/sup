@@ -5,8 +5,73 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestHerdrRegistersOnCreationAndReusesOnReopen(t *testing.T) {
+	f := newProjectFixture(t)
+	registered, installs, setups := false, 0, 0
+	f.runtime.runner = func(program string, capture bool, args ...string) ([]byte, error) {
+		if program == "sbx" {
+			if reflect.DeepEqual(args, []string{"setup", "ssh"}) {
+				setups++
+			}
+			if len(args) > 1 && args[0] == "exec" && args[1] == "-it" {
+				return nil, fmt.Errorf("Herdr launch attached an agent")
+			}
+			return f.command(program, capture, args...)
+		}
+		if program != herdrBinary() {
+			return nil, fmt.Errorf("unexpected command: %s %v", program, args)
+		}
+		if len(args) >= 2 && args[0] == "machine" {
+			switch args[1] {
+			case "list":
+				machines := []herdrMachine{}
+				if registered {
+					machines = append(machines, herdrMachine{ID: "m1", Target: "docker-docs.sbx", Session: "default", Enabled: true})
+				}
+				return json.Marshal(machines)
+			case "add":
+				p := f.project(t)
+				if !p.Ready || f.live[p.Name].Status != "running" {
+					return nil, fmt.Errorf("Herdr registration preceded sandbox creation")
+				}
+				registered = true
+				installs++
+				return nil, nil
+			}
+		}
+		if len(args) < 4 || !reflect.DeepEqual(args[:2], []string{"--machine", "m1"}) {
+			return nil, fmt.Errorf("incorrect Herdr routing: %v", args)
+		}
+		var result any
+		switch strings.Join(args[2:4], " ") {
+		case "server reload-config", "workspace focus":
+			result = map[string]any{}
+		case "workspace list":
+			result = map[string]any{"workspaces": []map[string]string{{"workspace_id": "w1"}}}
+		case "pane list":
+			result = map[string]any{"panes": []map[string]string{{"workspace_id": "w1", "cwd": projectDirectory}}}
+		default:
+			return nil, fmt.Errorf("unexpected Herdr command: %v", args)
+		}
+		return json.Marshal(map[string]any{"result": result})
+	}
+	for i := 0; i < 2; i++ {
+		if err := f.run(t, "docker/docs", "--via", "herdr"); err != nil {
+			t.Fatal(err)
+		}
+		p := f.project(t)
+		if p.MachineID != "m1" || p.HerdrWorkspace != "w1" {
+			t.Fatal("Herdr registration was not saved", p)
+		}
+	}
+	if f.next != 1 || installs != 1 || setups != 2 {
+		t.Fatal("creation or reopening skipped setup or duplicated a machine", f.next, installs, setups)
+	}
+}
 
 func TestHerdrReusesProjectWorkspace(t *testing.T) {
 	for _, scenario := range []struct {

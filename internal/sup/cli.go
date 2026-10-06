@@ -21,7 +21,7 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
 Project options:
   --via FRONTEND        terminal (default), ssh, or herdr
   --agent AGENT         codex (default), claude, or shell; terminal only
-  -d, --detached        Prepare the sandbox without attaching
+  -d, --detached        Prepare without attaching; cannot combine with --via
   --plan                Show the native SBX plan without saving a project
   --verbose             Stream the full SBX setup output
   --force               Skip removal confirmation for rm/recreate
@@ -139,6 +139,9 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	}
 	if o.via != "terminal" && o.via != "ssh" && o.via != "herdr" {
 		return o, errors.New("--via must be terminal, ssh, or herdr")
+	}
+	if o.detached && seen["--via"] {
+		return o, errors.New("--detached cannot be combined with --via; omit --detached to use the selected frontend")
 	}
 	if o.agent != "codex" && o.agent != "claude" && o.agent != "shell" {
 		return o, errors.New("--agent must be codex, claude, or shell")

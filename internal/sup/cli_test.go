@@ -34,6 +34,26 @@ func TestCLIRejectsEnvironmentConfiguration(t *testing.T) {
 	}
 }
 
+func TestCLIRejectsDetachedFrontendBeforeProvisioning(t *testing.T) {
+	for _, args := range [][]string{
+		{"docker/docs", "--via", "herdr", "-d"},
+		{"docker/docs", "--detached", "--via", "herdr"},
+		{"docker/docs", "--via", "ssh", "-d"},
+		{"docker/docs", "--via", "terminal", "-d"},
+		{"open", "docker/docs", "-d", "--via", "herdr"},
+		{"recreate", "docker/docs", "--force", "--via", "herdr", "-d"},
+	} {
+		f := newProjectFixture(t)
+		err := f.run(t, args...)
+		if err == nil || !strings.Contains(err.Error(), "--detached cannot be combined with --via") {
+			t.Fatal("missing actionable conflict error", args, err)
+		}
+		if len(f.calls) != 0 {
+			t.Fatal("conflicting options reached sandbox commands", f.calls)
+		}
+	}
+}
+
 func TestCompletionOffersSavedRepositoriesAndNames(t *testing.T) {
 	f := newProjectFixture(t)
 	t.Setenv("XDG_STATE_HOME", f.home)
