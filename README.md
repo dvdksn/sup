@@ -11,7 +11,7 @@ sup docker/docs --via ssh
 sup docker/docs --via herdr
 sup stop docker/docs
 sup recreate docker/docs               # Replace the machine; reset its state
-sup rm docker/docs                     # Remove the machine; keep the project definition
+sup rm docker/docs                     # Remove the machine and its Sup record
 sup ls
 ```
 
@@ -78,6 +78,11 @@ binary. Updating sup therefore changes the setup when you recreate the sandbox.
 Agent conversations, SQLite databases, configuration, and repository files stay
 inside the sandbox. Stop/start and switching agents retain them. `rm` and
 `recreate` discard them. Sup does not mount agent state onto the host.
+
+`rm` also deletes the saved project definition, rendered environment, and setup
+log. The project disappears from `ls` and completion. Start it again with the
+repository name, such as `sup docker/docs`. `recreate` rebuilds it immediately
+using the same repository.
 
 Push commits and preserve any files or conversations you need before removing
 or recreating a sandbox. Desktop clients may keep their own metadata separately.
