@@ -13,7 +13,7 @@ import (
 //go:embed completion.bash
 var bashCompletion string
 
-// Completion is deliberately independent of Lua and live sandbox inventory.
+// Completion reads saved project names without contacting SBX.
 func completeNames(args []string, out io.Writer) (int, error) {
 	if len(args) != 1 {
 		return 1, errors.New("expected a completion prefix")
@@ -44,16 +44,7 @@ func completeNames(args []string, out io.Writer) (int, error) {
 			}
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(root, name, "state.json"))
-		if err != nil {
-			continue
-		}
-		if _, err = decodeSnapshot(data, name); err != nil {
-			continue
-		}
-		if _, err = fmt.Fprintln(out, name); err != nil {
-			return 1, err
-		}
+
 	}
 	return 0, nil
 }

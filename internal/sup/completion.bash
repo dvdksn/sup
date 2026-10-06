@@ -11,19 +11,19 @@ _sup_complete() {
         fi
         if ((i == 1)); then
             case $word in
-                open|stop|recreate|inspect|history|rm|ls|args|kits|completion) command=$word; continue ;;
+                open|stop|recreate|inspect|history|rm|ls|completion) command=$word; continue ;;
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--native|--legacy|--no-history|--json|--yes|-y|--auto-approve) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--no-history|--json|--yes|-y|--auto-approve) ;;
             --*=*) ;;
-            --*|-a) value=$word ;;
+            --*) value=$word ;;
             -*) ;;
             *) if [[ $command == history && -z $target ]]; then command="history-$word"; else target=$word; fi ;;
         esac
     done
     if [[ -n $value ]]; then
-        if [[ $value == --config || $value == --env-file ]]; then
+        if [[ $value == --env-file ]]; then
             while IFS= read -r candidate; do
                 COMPREPLY+=("$candidate")
             done < <(compgen -f -- "$cur")
@@ -38,16 +38,15 @@ _sup_complete() {
     local words=''
     case $command in
         completion) [[ -z $target ]] && words='bash' ;;
-        ls) words='--native --json -h --help' ;;
-        args|kits) words='--config -h --help' ;;
+        ls) words='--json -h --help' ;;
         history) words='path clear' ;;
-        history-clear) words='--yes --native -h --help' ;;
-        history-path|stop|inspect) words='--native -h --help' ;;
-        open|recreate) words='--native --via --agent --env-file --env-arg --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
-        rm) words='-a --arg --name -f --force -h --help' ;;
-        '') words='-d --detached --kit --name -a --arg --config --native --legacy --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
+        history-clear) words='--yes -h --help' ;;
+        history-path|stop|inspect) words='-h --help' ;;
+        open|recreate) words='--via --agent --env-file --env-arg --kit --cwd --plan --force --auto-approve --detached -h --help' ;;
+        rm) words='-f --force -h --help' ;;
+        '') words='-d --detached --kit --name --env-file --env-arg --via --agent --cwd --no-history --auto-approve --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
-                words='args completion history inspect kits ls open recreate rm stop'
+                words='completion history inspect ls open recreate rm stop'
             fi ;;
     esac
     if [[ $cur == -* || $command == completion || $command == history ]] || ((COMP_CWORD == 1)); then
