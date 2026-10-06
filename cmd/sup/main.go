@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/dvdksn/sup/internal/sup"
 	"os"
+
+	"github.com/dvdksn/sup/internal/sup"
 )
 
 func main() {

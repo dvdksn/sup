@@ -11,43 +11,46 @@ _sup_complete() {
         fi
         if ((i == 1)); then
             case $word in
-                rm|ls|args|kits|completion) command=$word; continue ;;
+                open|stop|recreate|inspect|history|rm|ls|completion) command=$word; continue ;;
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help) ;;
+            -d|--detached|-f|--force|--plan|-h|--help|--json|--yes) ;;
             --*=*) ;;
-            --*|-a) value=$word ;;
+            --*) value=$word ;;
             -*) ;;
-            *) target=$word ;;
+            *) if [[ $command == history && -z $target ]]; then command="history-$word"; else target=$word; fi ;;
         esac
     done
     if [[ -n $value ]]; then
-        if [[ $value == --config ]]; then
-            while IFS= read -r candidate; do
-                COMPREPLY+=("$candidate")
-            done < <(compgen -f -- "$cur")
-            compopt -o filenames 2>/dev/null || :
+        if [[ $value == --via ]]; then
+            COMPREPLY=($(compgen -W 'terminal ssh herdr' -- "$cur"))
+        elif [[ $value == --agent ]]; then
+            COMPREPLY=($(compgen -W 'codex claude shell' -- "$cur"))
         fi
         return 0
     fi
     local words=''
     case $command in
         completion) [[ -z $target ]] && words='bash' ;;
-        ls) words='-h --help' ;;
-        args|kits) words='--config -h --help' ;;
-        rm) words='-a --arg --name -f --force -h --help' ;;
-        '') words='-d --detached --kit --name -a --arg --config --plan -h --help'
+        ls) words='--json -h --help' ;;
+        history) words='path clear' ;;
+        history-clear) words='--yes -h --help' ;;
+        history-path|stop|inspect) words='-h --help' ;;
+        open) words='--via --agent --plan --detached -h --help' ;;
+        recreate) words='--via --agent --plan --force --detached -h --help' ;;
+        rm) words='-f --force -h --help' ;;
+        '') words='-d --detached --via --agent --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
-                words='args completion kits ls rm'
+                words='completion history inspect ls open recreate rm stop'
             fi ;;
     esac
-    if [[ $cur == -* || $command == completion ]] || ((COMP_CWORD == 1)); then
+    if [[ $cur == -* || $command == completion || $command == history ]] || ((COMP_CWORD == 1)); then
         while IFS= read -r candidate; do
             COMPREPLY+=("$candidate")
         done < <(compgen -W "$words" -- "$cur")
     fi
-    if [[ -z $target && $cur != -* && ( -z $command || $command == rm ) ]]; then
+    if [[ -z $target && $cur != -* && ( -z $command || $command == rm || $command == open || $command == recreate || $command == stop || $command == inspect || $command == history-* ) ]]; then
         while IFS= read -r candidate; do
             COMPREPLY+=("$candidate")
         done < <("${COMP_WORDS[0]}" __complete "$cur" 2>/dev/null)

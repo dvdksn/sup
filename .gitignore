@@ -1,3 +1,5 @@
 .DS_Store
 /bin/sup
 /dist/
+__pycache__/
+*.pyc
