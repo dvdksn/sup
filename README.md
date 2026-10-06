@@ -43,7 +43,7 @@ sup docker/docs --via herdr
 sup docker/docs -d                    # Prepare without attaching
 ```
 
-`--via herdr` registers the sandbox as a Herdr machine and creates a workspace
+`--via herdr` registers the sandbox as a Herdr machine and selects a workspace
 for the repository. Select that machine in Herdr to run agents in its panes.
 
 ```sh
