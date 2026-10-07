@@ -70,6 +70,8 @@ eval "$(sup completion bash)"
 Sup embeds its [SBX environment](internal/sup/project.sbxenv.yaml) and approves
 creation plans automatically. Edit the template and rebuild to change the
 setup. Existing sandboxes get the new setup when recreated.
+Creation and recreation use the published `:latest` kits; SBX resolves the tags
+and pulls missing content. Reopening an existing sandbox keeps its installed kits.
 
 ```sh
 sup docker/docs --plan               # Preview the SBX plan
