@@ -8,19 +8,15 @@ args:
     default: [[ quote .Repo ]]
     description: GitHub repository in owner/repo form
     pattern: '^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$'
-  revision:
-    default: bb269dba968363dd3f6bc177eb934890447b5052
-    description: Kit build pinned by this sup release
-    pattern: '^[A-Za-z0-9_.-]+$'
 
 secrets:
   github:
     command: gh auth token
 
 kits:
-  - source: ghcr.io/dvdksn/kit-shell:${{ env.args.revision }}
-  - source: ghcr.io/dvdksn/kit-claude-mixin:${{ env.args.revision }}
-  - source: ghcr.io/dvdksn/kit-codex-mixin:${{ env.args.revision }}
-  - source: ghcr.io/dvdksn/kit-tools:${{ env.args.revision }}
+  - source: ghcr.io/dvdksn/kit-shell:latest
+  - source: ghcr.io/dvdksn/kit-claude-mixin:latest
+  - source: ghcr.io/dvdksn/kit-codex-mixin:latest
+  - source: ghcr.io/dvdksn/kit-tools:latest
     args:
       repo: ${{ env.args.repo }}
