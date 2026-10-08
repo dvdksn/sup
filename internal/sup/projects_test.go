@@ -277,7 +277,7 @@ func TestRepositoryLaunchApprovesAndReusesMachine(t *testing.T) {
 			creates++
 			approved := false
 			for _, arg := range call {
-				approved = approved || arg == "--auto-approve"
+				approved = approved || arg == "--force"
 			}
 			if !approved {
 				t.Fatal("creation required plan approval", call)
