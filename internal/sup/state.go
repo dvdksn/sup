@@ -101,17 +101,15 @@ func (r projectRuntime) inventory() (map[string]liveSandbox, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query sandbox inventory: %w", err)
 	}
-	var result struct {
-		Sandboxes *[]liveSandbox `json:"sandboxes"`
-	}
+	var result []liveSandbox
 	if err = json.Unmarshal(data, &result); err != nil {
 		return nil, err
 	}
-	if result.Sandboxes == nil {
-		return nil, errors.New("sbx inventory has no sandboxes array")
+	if result == nil {
+		return nil, errors.New("sbx inventory is not an array")
 	}
 	items := map[string]liveSandbox{}
-	for _, s := range *result.Sandboxes {
+	for _, s := range result {
 		if s.Name == "" || s.ID == "" || s.Status == "" {
 			return nil, errors.New("sbx inventory requires sandbox name, ID, and status")
 		}
