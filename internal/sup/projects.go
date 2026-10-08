@@ -97,7 +97,7 @@ func (r projectRuntime) run(o projectOptions) error {
 	}
 	var runErr error
 	if live == nil {
-		runErr = r.setup(p, "Creating", r.envArgs(p, "run", "--detached", "--auto-approve")...)
+		runErr = r.setup(p, "Creating", r.envArgs(p, "run", "--detach", "--auto-approve")...)
 	} else if live.Status != "running" {
 		// Existing machines already have their native setup. env exec starts a
 		// stopped machine without repeating host provisioning or its approvals.

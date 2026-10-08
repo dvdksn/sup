@@ -15,7 +15,7 @@ _sup_complete() {
             esac
         fi
         case $word in
-            -d|--detached|-f|--force|--plan|-h|--help|--json|--verbose) ;;
+            -d|--detach|-f|--force|--plan|-h|--help|--json|--verbose) ;;
             --*=*) ;;
             --*) value=$word ;;
             -*) ;;
@@ -36,10 +36,10 @@ _sup_complete() {
         ls) words='--json -h --help' ;;
         stop) words='--verbose -h --help' ;;
         inspect) words='-h --help' ;;
-        open) words='--verbose --via --agent --plan --detached -h --help' ;;
-        recreate) words='--verbose --via --agent --plan --force --detached -h --help' ;;
+        open) words='--verbose --via --agent --plan --detach -h --help' ;;
+        recreate) words='--verbose --via --agent --plan --force --detach -h --help' ;;
         rm) words='--verbose -f --force -h --help' ;;
-        '') words='--verbose -d --detached --via --agent --plan -h --help'
+        '') words='--verbose -d --detach --via --agent --plan -h --help'
             if ((COMP_CWORD == 1)) && [[ $cur != -* ]]; then
                 words='completion inspect ls open recreate rm stop'
             fi ;;

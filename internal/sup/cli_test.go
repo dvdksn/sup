@@ -37,7 +37,7 @@ func TestCLIRejectsEnvironmentConfiguration(t *testing.T) {
 func TestCLIRejectsDetachedFrontendBeforeProvisioning(t *testing.T) {
 	for _, args := range [][]string{
 		{"docker/docs", "--via", "herdr", "-d"},
-		{"docker/docs", "--detached", "--via", "herdr"},
+		{"docker/docs", "--detach", "--via", "herdr"},
 		{"docker/docs", "--via", "ssh", "-d"},
 		{"docker/docs", "--via", "terminal", "-d"},
 		{"open", "docker/docs", "-d", "--via", "herdr"},
@@ -45,7 +45,7 @@ func TestCLIRejectsDetachedFrontendBeforeProvisioning(t *testing.T) {
 	} {
 		f := newProjectFixture(t)
 		err := f.run(t, args...)
-		if err == nil || !strings.Contains(err.Error(), "--detached cannot be combined with --via") {
+		if err == nil || !strings.Contains(err.Error(), "--detach cannot be combined with --via") {
 			t.Fatal("missing actionable conflict error", args, err)
 		}
 		if len(f.calls) != 0 {
