@@ -26,7 +26,7 @@ _sup_complete() {
         if [[ $value == --via ]]; then
             COMPREPLY=($(compgen -W 'terminal ssh herdr' -- "$cur"))
         elif [[ $value == --agent ]]; then
-            COMPREPLY=($(compgen -W 'codex claude shell' -- "$cur"))
+            COMPREPLY=($(compgen -W 'codex claude' -- "$cur"))
         fi
         return 0
     fi

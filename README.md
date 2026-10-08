@@ -1,13 +1,13 @@
 # sup
 
-Run coding agents in a Docker sandbox, with one sandbox per GitHub repository.
+Open a Bash shell or coding agent in a Docker sandbox, with one sandbox per GitHub repository.
 
 ```sh
 sup docker/docs
 ```
 
-Sup creates the sandbox, clones the repository, and opens Codex. Run the same
-command again to return to it.
+Sup creates the sandbox, clones the repository, and opens an interactive Bash
+login shell. Run the same command again to return to it.
 
 ## Install
 
@@ -37,7 +37,7 @@ Keep any other publishers you already allow.
 
 ```sh
 sup docker/docs --agent claude
-sup docker/docs --agent shell
+sup docker/docs --agent codex
 sup docker/docs --via ssh             # Open a shell over SSH
 sup docker/docs --via herdr
 sup docker/docs -d                    # Prepare without attaching

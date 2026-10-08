@@ -17,6 +17,24 @@ func TestCLIHelp(t *testing.T) {
 	}
 }
 
+func TestCLIEntrypoints(t *testing.T) {
+	for _, agent := range []string{"", "codex", "claude"} {
+		args := []string{"docker/docs"}
+		if agent != "" {
+			args = append(args, "--agent", agent)
+		}
+		o, err := parseProjects(args)
+		if err != nil || o.agent != agent {
+			t.Fatal(args, o.agent, err)
+		}
+	}
+	for _, agent := range []string{"shell", "bash", "unknown"} {
+		if _, err := parseProjects([]string{"docker/docs", "--agent", agent}); err == nil {
+			t.Fatalf("accepted unsupported agent %s", agent)
+		}
+	}
+}
+
 func TestCommandExitStatus(t *testing.T) {
 	var out bytes.Buffer
 	r := projectRuntime{out: &out, stderr: &out}

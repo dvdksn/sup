@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -284,11 +285,11 @@ func TestRepositoryLaunchApprovesAndReusesMachine(t *testing.T) {
 			}
 		}
 		if len(call) > 2 && call[1] == "exec" && call[2] == "-it" {
-			want := "codex"
+			want := []string{"sbx", "exec", "-it", "--workdir", projectDirectory, "docker-docs", "bash", "-il"}
 			if agents == 1 {
-				want = "claude"
+				want = append(want[:7], "-lc", "cd "+shellQuote(projectDirectory)+" && exec claude")
 			}
-			if !strings.HasSuffix(call[len(call)-1], "exec "+want) {
+			if !reflect.DeepEqual(call, want) {
 				t.Fatal("launch did not attach to the selected agent", call)
 			}
 			agents++
@@ -296,6 +297,21 @@ func TestRepositoryLaunchApprovesAndReusesMachine(t *testing.T) {
 	}
 	if creates != 2 || agents != 2 {
 		t.Fatal("unexpected creation or attachment count", creates, agents)
+	}
+}
+
+func TestAgentEntrypoints(t *testing.T) {
+	for _, agent := range []string{"codex", "claude"} {
+		t.Run(agent, func(t *testing.T) {
+			f := newProjectFixture(t)
+			if err := f.run(t, "docker/docs", "--agent", agent); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"sbx", "exec", "-it", "--workdir", projectDirectory, "docker-docs", "bash", "-lc", "cd " + shellQuote(projectDirectory) + " && exec " + agent}
+			if got := f.calls[len(f.calls)-1]; !reflect.DeepEqual(got, want) {
+				t.Fatal("unexpected agent entrypoint", got)
+			}
+		})
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
-       sup open PROJECT [--via terminal|ssh|herdr] [--agent codex|claude|shell]
+       sup open PROJECT [--via terminal|ssh|herdr] [--agent codex|claude]
        sup ls [--json]
        sup inspect PROJECT           # Prints the saved project as JSON
        sup stop PROJECT
@@ -20,7 +20,7 @@ const projectHelp = `Usage: sup OWNER/REPO|PROJECT [options]
 
 Project options:
   --via FRONTEND        terminal (default), ssh, or herdr
-  --agent AGENT         codex (default), claude, or shell; terminal only
+  --agent AGENT         Launch codex or claude instead of Bash; terminal only
   -d, --detach          Prepare without attaching; cannot combine with --via
   --plan                Show the native SBX plan without saving a project
   --verbose             Stream the full SBX setup output
@@ -76,7 +76,6 @@ func projectResult(err error) (int, error) {
 }
 func parseProjects(args []string) (o projectOptions, err error) {
 	o.via = "terminal"
-	o.agent = "codex"
 	if len(args) > 0 {
 		switch args[0] {
 		case "open", "ls", "inspect", "stop", "rm", "recreate":
@@ -143,8 +142,8 @@ func parseProjects(args []string) (o projectOptions, err error) {
 	if o.detached && seen["--via"] {
 		return o, errors.New("--detach cannot be combined with --via; omit --detach to use the selected frontend")
 	}
-	if o.agent != "codex" && o.agent != "claude" && o.agent != "shell" {
-		return o, errors.New("--agent must be codex, claude, or shell")
+	if seen["--agent"] && o.agent != "codex" && o.agent != "claude" {
+		return o, errors.New("--agent must be codex or claude")
 	}
 	if seen["--agent"] && o.via != "terminal" {
 		return o, errors.New("--agent is only available with --via terminal")

@@ -135,7 +135,11 @@ func (r projectRuntime) run(o projectOptions) error {
 		return nil
 	}
 	if o.via == "terminal" {
-		fmt.Fprintf(r.stderr, "Opening %s in %s…\n", o.agent, p.Name)
+		entrypoint := o.agent
+		if entrypoint == "" {
+			entrypoint = "Bash"
+		}
+		fmt.Fprintf(r.stderr, "Opening %s in %s…\n", entrypoint, p.Name)
 	} else {
 		fmt.Fprintf(r.stderr, "Connecting to %s via %s…\n", p.Name, o.via)
 	}
@@ -152,7 +156,7 @@ func (r projectRuntime) run(o projectOptions) error {
 		return err
 	}
 	args := []string{"exec", "-it", "--workdir", projectDirectory, p.Name, "bash"}
-	if o.agent == "shell" {
+	if o.agent == "" {
 		args = append(args, "-il")
 	} else {
 		// The custom kit publishes its environment through login-shell profiles.
