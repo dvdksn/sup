@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,6 +20,9 @@ type projectFixture struct {
 	live                      map[string]liveSandbox
 	calls                     [][]string
 	next                      int
+	environment               string
+	fetches                   int
+	fetchStatus               int
 	failCreate, cancelRemoval bool
 }
 
@@ -25,11 +30,20 @@ func newProjectFixture(t *testing.T) *projectFixture {
 	t.Helper()
 	root := t.TempDir()
 	f := &projectFixture{home: root, live: map[string]liveSandbox{}}
-	f.runtime = projectRuntime{root: filepath.Join(root, "state"), out: io.Discard, stderr: io.Discard, runner: f.command}
+	f.environment = "schemaVersion: \"1\"\nname: dev\nagent: kit-shell\nargs:\n  repo:\n    required: true\nkits:\n  - source: ghcr.io/dvdksn/kit-shell:latest\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		f.fetches++
+		if f.fetchStatus != 0 {
+			w.WriteHeader(f.fetchStatus)
+		}
+		fmt.Fprint(w, f.environment)
+	}))
+	t.Cleanup(server.Close)
+	f.runtime = projectRuntime{environmentURL: server.URL, root: filepath.Join(root, "state"), out: io.Discard, stderr: io.Discard, runner: f.command}
 	return f
 }
 
-// Only the SBX command boundary is substituted; records and generated files are real.
+// SBX commands and the upstream HTTP endpoint are substituted; saved files are real.
 func (f *projectFixture) command(program string, capture bool, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, append([]string{program}, args...))
 	if program != "sbx" {
@@ -49,6 +63,9 @@ func (f *projectFixture) command(program string, capture bool, args ...string) (
 	}
 	if args[0] == "env" {
 		name := args[3] // Native flags must precede file operands.
+		if len(args) < 7 || args[4] != "--env-arg" || !strings.HasPrefix(args[5], "repo=") {
+			return nil, fmt.Errorf("missing repository argument: %v", args)
+		}
 		switch args[1] {
 		case "run":
 			f.next++
@@ -202,55 +219,62 @@ func TestPlanDoesNotSaveProject(t *testing.T) {
 	if _, err := os.Stat(f.runtime.path("docker-docs")); !os.IsNotExist(err) {
 		t.Fatal("plan saved a project", err)
 	}
+	if f.fetches != 1 {
+		t.Fatal("plan did not fetch upstream environment", f.fetches)
+	}
+	call := f.calls[len(f.calls)-1]
+	if !reflect.DeepEqual(call[:7], []string{"sbx", "env", "plan", "--name", "docker-docs", "--env-arg", "repo=docker/docs"}) {
+		t.Fatal("plan did not supply project arguments", call)
+	}
 }
 
-func TestEmbeddedEnvironmentAndSavedSnapshot(t *testing.T) {
+func TestFetchedEnvironmentAndSavedSnapshot(t *testing.T) {
 	f := newProjectFixture(t)
-	config := filepath.Join(f.home, "config")
-	t.Setenv("XDG_CONFIG_HOME", config)
-	if err := os.MkdirAll(filepath.Join(config, "sup"), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(config, "sup", "sbxenv.yaml"), []byte("external config must be ignored"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	f.start(t)
 	path := f.runtime.envPath("docker-docs")
 	original, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || string(original) != f.environment || f.fetches != 1 {
+		t.Fatal("creation did not save upstream environment", string(original), f.fetches, err)
 	}
-	content := string(original)
-	for _, required := range []string{`name: "docker-docs"`, `default: "docker/docs"`, "kit-claude-mixin:", "kit-codex-mixin:"} {
-		if !strings.Contains(content, required) {
-			t.Fatal("incomplete embedded environment", required)
+	f.environment += "  - source: ghcr.io/dvdksn/kit-rumdl:latest\n"
+	f.fetchStatus = http.StatusServiceUnavailable
+	for _, args := range [][]string{{"docker-docs", "-d"}, {"stop", "docker-docs"}, {"docker-docs", "-d"}} {
+		if err := f.run(t, args...); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if strings.Contains(content, "[[ quote") || strings.Contains(content, "[[ ") || strings.Contains(content, "external config") {
-		t.Fatal("environment was not rendered solely from the bundle")
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(original) || f.fetches != 1 {
+		t.Fatal("reopen fetched or replaced the saved environment", f.fetches, err)
 	}
-	for _, forbidden := range []string{"lifecycle:", "CODEX_SQLITE_HOME", "project-history", "sbx mount"} {
-		if strings.Contains(content, forbidden) {
-			t.Fatal("environment still persists agent state on the host", forbidden)
-		}
+	originalID := f.project(t).SandboxID
+	if err := f.run(t, "recreate", "docker-docs", "--force", "-d"); err == nil {
+		t.Fatal("recreation ignored fetch failure")
 	}
-	snapshot := append([]byte("# saved environment\n"), original...)
-	if err := os.WriteFile(path, snapshot, 0600); err != nil {
-		t.Fatal(err)
+	if f.project(t).SandboxID != originalID || f.live["docker-docs"].ID != originalID {
+		t.Fatal("fetch failure removed the existing sandbox")
 	}
-	if err := f.run(t, "docker-docs", "-d"); err != nil {
-		t.Fatal(err)
-	}
-	after, _ := os.ReadFile(path)
-	if string(after) != string(snapshot) {
-		t.Fatal("reopen replaced the existing machine's environment")
-	}
+	f.fetchStatus = 0
 	if err := f.run(t, "recreate", "docker-docs", "--force", "-d"); err != nil {
 		t.Fatal(err)
 	}
-	after, _ = os.ReadFile(path)
-	if string(after) != string(original) {
-		t.Fatal("recreation did not use the embedded environment")
+	after, err = os.ReadFile(path)
+	if err != nil || string(after) != f.environment || f.fetches != 3 {
+		t.Fatal("recreation did not fetch the updated environment", string(after), f.fetches, err)
+	}
+}
+
+func TestEnvironmentFetchFailureDoesNotProvision(t *testing.T) {
+	f := newProjectFixture(t)
+	f.fetchStatus = http.StatusNotFound
+	if err := f.run(t, "docker/docs", "-d"); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatal("missing fetch error", err)
+	}
+	if f.next != 0 {
+		t.Fatal("provisioned after fetch failure")
+	}
+	if _, err := os.Stat(f.runtime.path("docker-docs")); !os.IsNotExist(err) {
+		t.Fatal("fetch failure saved project", err)
 	}
 }
 

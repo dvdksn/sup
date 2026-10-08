@@ -18,11 +18,12 @@ type projectOptions struct {
 	detached, plan, force, json, help, verbose bool
 }
 type projectRuntime struct {
-	root        string
-	in          io.Reader
-	out, stderr io.Writer
-	verbose     bool
-	runner      func(string, bool, ...string) ([]byte, error)
+	environmentURL string
+	root           string
+	in             io.Reader
+	out, stderr    io.Writer
+	verbose        bool
+	runner         func(string, bool, ...string) ([]byte, error)
 }
 type liveSandbox struct {
 	Name   string `json:"name"`

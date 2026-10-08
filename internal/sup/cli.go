@@ -27,7 +27,7 @@ Project options:
   --force               Skip removal confirmation for rm/recreate
 
 One sandbox per repository; names are derived from owner/repo.
-Creation plans are approved automatically. The environment is embedded in sup.
+Creation plans are approved automatically. The environment is fetched from dvdksn/kit on creation.
 Sessions stay inside the sandbox. Removing or recreating it resets all state.
 `
 

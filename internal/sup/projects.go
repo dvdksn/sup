@@ -39,6 +39,13 @@ func (r projectRuntime) run(o projectOptions) error {
 	} else if repo != "" && repo != p.Repo {
 		return fmt.Errorf("project belongs to %s", p.Repo)
 	}
+	var environment []byte
+	if o.plan || o.command == "recreate" {
+		environment, err = r.fetchEnvironment()
+		if err != nil {
+			return err
+		}
+	}
 	if o.plan {
 		temp, err := os.MkdirTemp("", "sup-plan-")
 		if err != nil {
@@ -46,10 +53,10 @@ func (r projectRuntime) run(o projectOptions) error {
 		}
 		defer os.RemoveAll(temp)
 		path := filepath.Join(temp, "sbxenv.yaml")
-		if err := r.writeEnvironment(p, path); err != nil {
+		if err := writePrivateBytes(path, environment); err != nil {
 			return err
 		}
-		_, err = r.command("sbx", false, "env", "plan", "--name", p.Name, path)
+		_, err = r.command("sbx", false, r.envArgsAt(p, "plan", path)...)
 		return err
 	}
 	if o.command == "inspect" {
@@ -88,7 +95,13 @@ func (r projectRuntime) run(o projectOptions) error {
 		return errors.New("project creation failed; use sup recreate " + p.Name + " to retry")
 	}
 	if live == nil {
-		if err = r.writeEnvironment(p, r.envPath(p.Name)); err != nil {
+		if environment == nil {
+			environment, err = r.fetchEnvironment()
+			if err != nil {
+				return err
+			}
+		}
+		if err = writePrivateBytes(r.envPath(p.Name), environment); err != nil {
 			return err
 		}
 	}

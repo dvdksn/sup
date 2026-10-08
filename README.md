@@ -21,7 +21,7 @@ Install [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) (SBX v0.48 or
 newer) and sign in with `gh` on the host. Load your SSH key for Git signing.
 SBX manages agent credentials.
 
-The bundled environment uses [dvdksn/kit](https://github.com/dvdksn/kit), with
+The upstream environment uses [dvdksn/kit](https://github.com/dvdksn/kit), with
 Codex, Claude, a shell, GitHub cloning, Git signing, and rumdl.
 
 Allow `ghcr.io/dvdksn/` in SBX's kit publisher settings. Starting from the
@@ -67,9 +67,12 @@ eval "$(sup completion bash)"
 
 ## Setup and troubleshooting
 
-Sup embeds its [SBX environment](internal/sup/project.sbxenv.yaml) and approves
-creation plans automatically. Edit the template and rebuild to change the
-setup. Existing sandboxes get the new setup when recreated.
+Sup fetches the [SBX environment](https://github.com/dvdksn/kit/blob/main/sbxenv.yaml)
+from `dvdksn/kit` on creation, recreation, and `--plan`, and approves creation
+plans automatically. Changes to that upstream file apply to new or recreated
+sandboxes without rebuilding Sup. Each project keeps a local copy for reopening
+and removal; those operations do not fetch the upstream file. Download failures
+stop the operation; recreation downloads before removing the existing sandbox.
 Creation and recreation use the published `:latest` kits; SBX resolves the tags
 and pulls missing content. Reopening an existing sandbox keeps its installed kits.
 
