@@ -39,7 +39,7 @@ func (f *projectFixture) command(program string, capture bool, args ...string) (
 		for _, item := range f.live {
 			items = append(items, item)
 		}
-		return json.Marshal(map[string]any{"sandboxes": items})
+		return json.Marshal(items)
 	}
 	if args[0] == "stop" {
 		item := f.live[args[1]]
