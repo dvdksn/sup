@@ -17,6 +17,9 @@ kits:
   - source: ghcr.io/dvdksn/kit-shell:latest
   - source: ghcr.io/dvdksn/kit-claude-mixin:latest
   - source: ghcr.io/dvdksn/kit-codex-mixin:latest
-  - source: ghcr.io/dvdksn/kit-tools:latest
+  - source: ghcr.io/dvdksn/kit-github-ssh:latest
+  - source: ghcr.io/dvdksn/kit-git-signing:latest
+  - source: ghcr.io/dvdksn/kit-rumdl:latest
+  - source: ghcr.io/dvdksn/kit-github-clone:latest
     args:
       repo: ${{ env.args.repo }}

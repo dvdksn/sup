@@ -17,9 +17,9 @@ From this checkout, with Go 1.23 or newer:
 go install ./cmd/sup
 ```
 
-Install [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) and sign in
-with `gh` on the host. Load your SSH key for Git signing. SBX manages agent
-credentials.
+Install [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/) (SBX v0.48 or
+newer) and sign in with `gh` on the host. Load your SSH key for Git signing.
+SBX manages agent credentials.
 
 The bundled environment uses [dvdksn/kit](https://github.com/dvdksn/kit), with
 Codex, Claude, a shell, GitHub cloning, Git signing, and rumdl.
